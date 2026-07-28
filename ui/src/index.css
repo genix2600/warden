@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+/*
+  Warden's visual language is deliberately the opposite of the software it
+  competes with. "PC optimiser" tools sell alarm: red banners, exclamation
+  marks, counters of invented problems. A tool asking permission to run commands
+  on your machine has to look like an instrument instead -- calm, dense,
+  monospaced where it matters, and quiet until it genuinely has something.
+
+  Dark-only, and chosen rather than inverted: the steps below are the dark-mode
+  values from a validated palette, checked against this surface with the
+  palette validator (2-series categorical: all five checks pass on #141922).
+*/
+@theme {
+  --color-plane: #0b0f14;
+  --color-surface: #141922;
+  --color-raised: #1b2331;
+  --color-sunken: #0f141b;
+
+  --color-ink: #f2f5f8;
+  --color-ink-2: #a9b4c2;
+  --color-muted: #6b7787;
+  --color-grid: #232c3a;
+  --color-hairline: rgba(255, 255, 255, 0.08);
+
+  /* Categorical slots 1 and 2, dark steps. Delivered clock and processor load
+     are two measures on one 0-100 scale, so they share a single axis. */
+  --color-series-1: #3987e5;
+  --color-series-2: #d95926;
+
+  /* Status palette: fixed, never themed, never reused as a series colour.
+     `warning` and `serious` sit close enough that hue alone cannot separate
+     them, so every status in this interface ships an icon and a word beside
+     it, and those two never appear in the same list. */
+  --color-good: #0ca30c;
+  --color-warning: #fab219;
+  --color-serious: #ec835a;
+  --color-critical: #d03b3b;
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Cascadia Code", "Consolas", ui-monospace, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-plane);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The window is a fixed-size desktop shell, so panels scroll, not the page. */
+.scroll-y {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-grid) transparent;
+}
+
+@keyframes warden-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.pulse {
+  animation: warden-pulse 2s ease-in-out infinite;
+}
+
+@keyframes warden-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.rise {
+  animation: warden-rise 0.22s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse,
+  .rise {
+    animation: none;
+  }
+}

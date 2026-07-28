@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / UI build
+node_modules/
+ui/dist/
+
+# Generated from the Python contracts by `npm run gen:types`. Committing these
+# would let a stale copy disagree with the backend without anything failing.
+ui/src/generated/
+ui/openapi.json
+
+# Third-party sensor library, fetched by scripts/fetch-sensors.ps1 (MPL-2.0, not vendored)
+vendor/
+
+# Runtime state: recorded sessions from live runs. fixtures/ IS committed; sessions/ is not.
+sessions/
+
+# Local, machine-specific overrides. Never contains credentials by design.
+warden.local.toml
+
+# OS
+Thumbs.db
+desktop.ini

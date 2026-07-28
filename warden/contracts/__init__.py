@@ -1,0 +1,118 @@
+"""Frozen interfaces between Warden's layers.
+
+Import direction is one-way: every module may import from ``warden.contracts``;
+``warden.contracts`` imports nothing else from the package. Changing a type here
+is a breaking change to the UI, the session log format and the fixtures at once,
+so it is the one directory worth reading before the others.
+"""
+
+from warden.contracts.actions import (
+    ActionProposal,
+    ActionSpec,
+    Decision,
+    ExecutionOutcome,
+    ExecutionRecord,
+    PredicateRef,
+    VerificationOutcome,
+    VerificationResult,
+    VerifySpec,
+)
+from warden.contracts.common import (
+    Contract,
+    Domain,
+    Mechanism,
+    Ref,
+    RiskTier,
+    Severity,
+    Source,
+    Verdict,
+    new_id,
+    utcnow,
+)
+from warden.contracts.diagnosis import (
+    Diagnosis,
+    Hypothesis,
+    ReasonerInfo,
+    ReasonerMode,
+    ServiceAdvice,
+)
+from warden.contracts.events import (
+    AgentEvent,
+    AgentEventAdapter,
+    AgentLogEvent,
+    AgentStatusEvent,
+    DecisionEvent,
+    DiagnosisReadyEvent,
+    ExecutionFinishedEvent,
+    ExecutionOutputEvent,
+    ExecutionStartedEvent,
+    IncidentClosedEvent,
+    IncidentOpenedEvent,
+    IncidentStateEvent,
+    ProposalPendingEvent,
+    SymptomClearedEvent,
+    SymptomRaisedEvent,
+    TelemetryEvent,
+    VerificationEvent,
+)
+from warden.contracts.incidents import Incident, IncidentState
+from warden.contracts.observations import (
+    Observation,
+    ObservationKind,
+    ProbeError,
+    ProbeResult,
+    Provenance,
+)
+from warden.contracts.symptoms import Symptom
+
+__all__ = [
+    "ActionProposal",
+    "ActionSpec",
+    "AgentEvent",
+    "AgentEventAdapter",
+    "AgentLogEvent",
+    "AgentStatusEvent",
+    "Contract",
+    "Decision",
+    "DecisionEvent",
+    "Diagnosis",
+    "DiagnosisReadyEvent",
+    "Domain",
+    "ExecutionFinishedEvent",
+    "ExecutionOutcome",
+    "ExecutionOutputEvent",
+    "ExecutionRecord",
+    "ExecutionStartedEvent",
+    "Hypothesis",
+    "Incident",
+    "IncidentClosedEvent",
+    "IncidentOpenedEvent",
+    "IncidentState",
+    "IncidentStateEvent",
+    "Mechanism",
+    "Observation",
+    "ObservationKind",
+    "PredicateRef",
+    "ProbeError",
+    "ProbeResult",
+    "ProposalPendingEvent",
+    "Provenance",
+    "ReasonerInfo",
+    "ReasonerMode",
+    "Ref",
+    "RiskTier",
+    "ServiceAdvice",
+    "Severity",
+    "Source",
+    "Symptom",
+    "SymptomClearedEvent",
+    "SymptomRaisedEvent",
+    "TelemetryEvent",
+    "Verdict",
+    "VerificationEvent",
+    "VerificationOutcome",
+    "VerificationResult",
+    "VerifySpec",
+    "new_id",
+    "utcnow",
+]

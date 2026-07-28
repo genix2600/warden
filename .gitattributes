@@ -1,0 +1,12 @@
+# Normalise line endings so a clone on any machine produces the same bytes.
+# Without this, a Windows checkout rewrites every file to CRLF and the next
+# commit shows a diff for files nobody touched.
+* text=auto eol=lf
+
+# PowerShell is happiest with CRLF and these are Windows-only by definition.
+*.ps1 text eol=crlf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.dll binary
