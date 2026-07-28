@@ -210,3 +210,5 @@ executable proposal is enforced there, in `diagnosis.py`, by a model validator.
 - **Real temperatures need elevation and a third-party library.** Without them Warden falls back to throttle inference, which is weaker but never absent.
 - **The local model is optional and untested at scale.** Every scenario is handled by the rules engine; the model has been exercised against its schema, not across many machines.
 - **No installer.** It runs from source. Packaging was not where the time belonged.
+# warden
+Windows diagnostician

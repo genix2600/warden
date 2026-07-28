@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 Warden
+Copyright (c) 2026 Aaryaman V
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,12 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-Third-party components
-
-LibreHardwareMonitorLib is NOT distributed with this repository. It is fetched
-on demand by scripts/fetch-sensors.ps1 and is licensed under the Mozilla Public
-License 2.0 by its own authors. Warden loads it at runtime and functions without
-it, falling back to clock-throttle inference for thermal diagnosis.
