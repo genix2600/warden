@@ -15,6 +15,7 @@ from warden.detectors.base import Detector
 from warden.detectors.devices import DeviceFaultDetector, DiskSpaceDetector
 from warden.detectors.hardware import BatteryHealthDetector, StorageHealthDetector
 from warden.detectors.network import ReachabilityDetector, WifiLinkDetector
+from warden.detectors.privacy import CameraDeviceDetector, PrivacyBlockDetector
 from warden.detectors.services import ServiceDetector
 from warden.detectors.thermal import ThermalThrottleDetector
 from warden.store import ObservationStore
@@ -23,10 +24,12 @@ log = logging.getLogger(__name__)
 
 __all__ = [
     "BatteryHealthDetector",
+    "CameraDeviceDetector",
     "Detector",
     "DetectorBank",
     "DeviceFaultDetector",
     "DiskSpaceDetector",
+    "PrivacyBlockDetector",
     "ReachabilityDetector",
     "ServiceDetector",
     "StorageHealthDetector",
@@ -46,6 +49,8 @@ def build_default_detectors() -> list[Detector]:
         BatteryHealthDetector(),
         StorageHealthDetector(),
         ServiceDetector(),
+        PrivacyBlockDetector(),
+        CameraDeviceDetector(),
     ]
 
 

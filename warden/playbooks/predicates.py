@@ -107,6 +107,32 @@ def service_running(store: ObservationStore, args: dict[str, JsonValue]) -> tupl
     return None, f"{wanted} was not present in the service reading"
 
 
+def privacy_allowed(store: ObservationStore, args: dict[str, JsonValue]) -> tuple[bool | None, str]:
+    """Is the capability no longer denied, at the scope we changed?"""
+    label = "camera" if args.get("capability") == "webcam" else "microphone"
+    observation = store.latest(f"privacy.{label}")
+    if observation is None or not isinstance(observation.value, dict):
+        return None, f"no privacy reading for the {label} is available"
+    scope = str(args.get("scope") or "user")
+    value = observation.value.get(scope)
+    if value == "Deny":
+        return False, f"{label} access is still set to Deny at {scope} scope"
+    return True, f"{label} access at {scope} scope is now {value or 'unset, which allows it'}"
+
+
+def camera_enabled(store: ObservationStore, args: dict[str, JsonValue]) -> tuple[bool | None, str]:
+    observation = store.latest("cam.devices")
+    if observation is None or not isinstance(observation.value, list):
+        return None, "no camera inventory is available"
+    wanted = args.get("instance_id")
+    for raw in observation.value:
+        if isinstance(raw, dict) and raw.get("instance_id") == wanted:
+            if raw.get("problem_code") == 22:
+                return False, f"{raw.get('name')} is still disabled"
+            return True, f"{raw.get('name')} reports status {raw.get('status')}"
+    return None, "that camera is no longer in the device list"
+
+
 def report_only(store: ObservationStore, args: dict[str, JsonValue]) -> tuple[bool | None, str]:
     """For READ_ONLY actions: success means the command produced its report.
 
@@ -124,5 +150,7 @@ PREDICATES: dict[str, Predicate] = {
     "net.gateway_reachable": gateway_reachable,
     "device.healthy": device_healthy,
     "service.running": service_running,
+    "privacy.allowed": privacy_allowed,
+    "camera.enabled": camera_enabled,
     "report.only": report_only,
 }

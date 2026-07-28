@@ -204,6 +204,8 @@ class PowerShellBridge:
             "-ErrorAction SilentlyContinue; ''",
             # Measured at 4.4s on first call, under 300ms afterwards.
             "Get-PhysicalDisk | Out-Null; ''",
+            # Same story: 3.7s cold, ~200ms warm.
+            "Get-PnpDevice -Class Camera -ErrorAction SilentlyContinue | Out-Null; ''",
             "Get-CimInstance Win32_Processor -Property Name | Out-Null; ''",
             "Get-CimInstance Win32_PerfFormattedData_Counters_ProcessorInformation "
             "-Filter \"Name='_Total'\" | Out-Null; ''",

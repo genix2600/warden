@@ -685,7 +685,121 @@ def _service_stopped(symptom: Symptom, store: ObservationStore) -> Draft:
     )
 
 
+# --------------------------------------------------------------------------
+# Camera and microphone
+# --------------------------------------------------------------------------
+
+
+def _privacy_blocked(symptom: Symptom, store: ObservationStore) -> Draft:
+    """The best example in the product of an invisible cause.
+
+    A denied capability produces a black image or silence with no error message
+    anywhere. Users reinstall drivers, reinstall the application, and eventually
+    conclude the hardware has failed -- for a setting that takes one value change
+    to fix, in a place they have no reason to look.
+    """
+    facts = symptom.facts
+    device = facts.get("device")
+    machine_scope = facts.get("blocked_scope") == "machine"
+
+    return Draft(
+        summary=(
+            f"Your {device} hardware is fine and its driver is loaded. Windows is "
+            f"refusing to let applications use it, because {device} access is switched "
+            f"off in Privacy settings"
+            + (
+                " for the entire machine, which overrides anything you set for your own "
+                "account and is why turning it on in your own Settings did not help."
+                if machine_scope
+                else " for your account."
+            )
+        ),
+        hypotheses=[
+            _h(
+                f"{device.capitalize()} access is set to Deny in Windows privacy settings.",
+                Domain.CONFIGURATION,
+                0.95,
+                (
+                    f"The device is present and enumerated, and the service behind it is "
+                    f"running, so nothing is broken. The consent value is read directly "
+                    f"from the same registry key the Settings app writes to. This is the "
+                    f"cause almost every time the {device} produces "
+                    + ("a black image" if device == "camera" else "silence")
+                    + " with no error."
+                ),
+            ),
+            _h(
+                "A privacy or security tool is enforcing the setting.",
+                Domain.SOFTWARE,
+                0.05,
+                "Some antivirus and privacy suites manage this setting themselves and "
+                "will set it back. If it reverts within a few minutes, that is the cause.",
+            ),
+        ],
+        prefer=("privacy.allow",),
+    )
+
+
+def _camera_disabled(symptom: Symptom, store: ObservationStore) -> Draft:
+    facts = symptom.facts
+    name = facts.get("name")
+    deliberate = bool(facts.get("deliberately_disabled"))
+
+    if deliberate:
+        return Draft(
+            summary=(
+                f"{name} is present but switched off in Device Manager. Windows reports "
+                f"problem code 22, which only happens when something disabled it on "
+                f"purpose -- it does not occur by accident."
+            ),
+            hypotheses=[
+                _h(
+                    "The camera was disabled in Device Manager, by a person or by software.",
+                    Domain.CONFIGURATION,
+                    0.9,
+                    "Problem code 22 means exactly 'disabled', as distinct from failed or "
+                    "missing a driver. Privacy tools and some laptop utilities do this.",
+                ),
+                _h(
+                    "A hardware camera shutter or function key is also engaged.",
+                    Domain.HARDWARE,
+                    0.1,
+                    "Many laptops have a physical shutter that Windows cannot see. Worth "
+                    "checking if the picture stays black after the device is enabled.",
+                ),
+            ],
+            prefer=("cam.device.enable",),
+        )
+
+    return Draft(
+        summary=(
+            f"{name} is present but not working correctly. Windows reports it as "
+            f"{facts.get('status')!r}."
+        ),
+        hypotheses=[
+            _h(
+                "The camera driver has failed to start.",
+                Domain.DRIVER,
+                0.6,
+                "The device enumerates but does not reach a working state, which usually "
+                "means the driver rather than the hardware.",
+            ),
+            _h(
+                "The camera module or its connection has failed.",
+                Domain.HARDWARE,
+                0.4,
+                "Common on laptops where the camera ribbon runs through the hinge. If "
+                "re-enabling does not clear it, this becomes the leading explanation.",
+            ),
+        ],
+        prefer=("cam.device.enable",),
+    )
+
+
 HANDLERS: dict[str, Handler] = {
+    "CAM.BLOCKED_BY_PRIVACY": _privacy_blocked,
+    "MIC.BLOCKED_BY_PRIVACY": _privacy_blocked,
+    "CAM.DEVICE_DISABLED": _camera_disabled,
     "POWER.BATTERY_WORN": _battery_worn,
     "STORAGE.DISK_UNHEALTHY": _disk_unhealthy,
     "NET.WIFI.DISCONNECTED": _wifi_disconnected,
