@@ -91,10 +91,16 @@ TEMP_REPORT = Playbook(
         "-ExecutionPolicy",
         "Bypass",
         "-Command",
-        'foreach ($p in @($env:TEMP, "$env:SystemRoot\\Temp")) { '
+        # Every brace is doubled: the PowerShell script block's own, and the
+        # {0}/{1} placeholders of PowerShell's -f operator. This string is a
+        # Python format template first, so single braces are read as parameters
+        # and the action is refused on every proposal. `check_template` catches
+        # that at registry construction now -- it did not exist when this was
+        # first written, and this template was silently broken.
+        'foreach ($p in @($env:TEMP, "$env:SystemRoot\\Temp")) {{ '
         "$b = (Get-ChildItem $p -Recurse -Force -ErrorAction SilentlyContinue | "
         "Measure-Object Length -Sum).Sum; "
-        "'{0}: {1:N1} GB' -f $p, ($b / 1GB) }",
+        "'{{0}}: {{1:N1}} GB' -f $p, ($b / 1GB) }}",
     ],
     expected_effect="Prints the size of each temporary folder. Nothing is deleted.",
     verify=VerifySpec(

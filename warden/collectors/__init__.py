@@ -18,12 +18,14 @@ from concurrent.futures import ThreadPoolExecutor
 
 from warden.collectors.base import Collector
 from warden.collectors.hardware import BatteryCollector, StorageHealthCollector
+from warden.collectors.netconfig import NetConfigCollector
 from warden.collectors.network import ConnectivityCollector, WifiCollector
 from warden.collectors.privacy import PrivacyCollector
 from warden.collectors.psbridge import PowerShellBridge
 from warden.collectors.services import ServiceCollector
 from warden.collectors.system import ProcessCollector, SystemCollector
 from warden.collectors.thermal import ThermalCollector
+from warden.collectors.timesync import TimeSyncCollector
 from warden.collectors.windows import DeviceCollector, EventLogCollector
 from warden.contracts import ProbeResult
 
@@ -36,12 +38,14 @@ __all__ = [
     "ConnectivityCollector",
     "DeviceCollector",
     "EventLogCollector",
+    "NetConfigCollector",
     "PrivacyCollector",
     "ProcessCollector",
     "ServiceCollector",
     "StorageHealthCollector",
     "SystemCollector",
     "ThermalCollector",
+    "TimeSyncCollector",
     "WifiCollector",
     "build_default_collectors",
 ]
@@ -60,6 +64,8 @@ def build_default_collectors(bridge: PowerShellBridge) -> list[Collector]:
         StorageHealthCollector(bridge),
         ServiceCollector(bridge),
         PrivacyCollector(bridge),
+        NetConfigCollector(bridge),
+        TimeSyncCollector(bridge),
     ]
 
 

@@ -133,6 +133,55 @@ def camera_enabled(store: ObservationStore, args: dict[str, JsonValue]) -> tuple
     return None, "that camera is no longer in the device list"
 
 
+def net_profile_private(
+    store: ObservationStore, args: dict[str, JsonValue]
+) -> tuple[bool | None, str]:
+    observation = store.latest("net.profile")
+    if observation is None or not isinstance(observation.value, list):
+        return None, "no network profile reading is available"
+    wanted = args.get("name")
+    for raw in observation.value:
+        if isinstance(raw, dict) and raw.get("name") == wanted:
+            category = raw.get("category")
+            if category == "public":
+                return False, f"{wanted} is still categorised as public"
+            return True, f"{wanted} is now categorised as {category}"
+    return None, f"{wanted} is no longer among the visible networks"
+
+
+def hosts_entry_cleared(
+    store: ObservationStore, args: dict[str, JsonValue]
+) -> tuple[bool | None, str]:
+    observation = store.latest("net.hosts")
+    if observation is None or not isinstance(observation.value, list):
+        return None, "no hosts file reading is available"
+    hostname = str(args.get("hostname") or "").lower()
+    for raw in observation.value:
+        if isinstance(raw, dict):
+            hosts = raw.get("hosts")
+            if isinstance(hosts, list) and any(str(h).lower() == hostname for h in hosts):
+                return False, f"{hostname} is still active in the hosts file"
+    return True, f"{hostname} is no longer overridden by the hosts file"
+
+
+def time_synchronised(
+    store: ObservationStore, args: dict[str, JsonValue]
+) -> tuple[bool | None, str]:
+    """Did the clock actually come under a time server's control?
+
+    Checked by re-reading the reported source rather than by trusting w32tm's
+    own output, which prints a success message in cases where the resync did
+    not in fact take.
+    """
+    observation = store.latest("sys.time.sync")
+    if observation is None or not isinstance(observation.value, dict):
+        return None, "no clock reading is available"
+    sync = observation.value
+    if sync.get("free_running") or sync.get("never_synced"):
+        return False, f"the clock is still running on {sync.get('source')}"
+    return True, f"the clock is now synchronised against {sync.get('source')}"
+
+
 def report_only(store: ObservationStore, args: dict[str, JsonValue]) -> tuple[bool | None, str]:
     """For READ_ONLY actions: success means the command produced its report.
 
@@ -152,5 +201,8 @@ PREDICATES: dict[str, Predicate] = {
     "service.running": service_running,
     "privacy.allowed": privacy_allowed,
     "camera.enabled": camera_enabled,
+    "net.profile_private": net_profile_private,
+    "net.hosts_clear": hosts_entry_cleared,
+    "time.synchronised": time_synchronised,
     "report.only": report_only,
 }

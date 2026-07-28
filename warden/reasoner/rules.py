@@ -37,7 +37,7 @@ from warden.contracts import (
     Verdict,
 )
 from warden.playbooks import CANDIDATES, REGISTRY, ActionRejected, PlaybookRegistry
-from warden.store import ObservationStore, as_dict, as_float
+from warden.store import ObservationStore, as_dict, as_float, as_list
 
 log = logging.getLogger(__name__)
 
@@ -699,7 +699,9 @@ def _privacy_blocked(symptom: Symptom, store: ObservationStore) -> Draft:
     to fix, in a place they have no reason to look.
     """
     facts = symptom.facts
-    device = facts.get("device")
+    # Facts are JsonValue on the wire, so anything interpolated into prose is
+    # coerced at the point of use rather than assumed to be a string.
+    device = str(facts.get("device") or "device")
     machine_scope = facts.get("blocked_scope") == "machine"
 
     return Draft(
@@ -796,7 +798,168 @@ def _camera_disabled(symptom: Symptom, store: ObservationStore) -> Draft:
     )
 
 
+# --------------------------------------------------------------------------
+# Invisible misconfiguration
+# --------------------------------------------------------------------------
+
+
+def _profile_public(symptom: Symptom, store: ObservationStore) -> Draft:
+    """Deliberately framed as a choice, because that is what it is.
+
+    Public is the safe default and the right answer on a network the user does
+    not control. Warden explains the consequence and the trade-off, and lets the
+    person who knows whether they trust the network decide.
+    """
+    facts = symptom.facts
+    network = facts.get("network")
+    known = bool(facts.get("is_saved_wireless_profile"))
+
+    return Draft(
+        summary=(
+            f"{network} is set up as a public network, which is why you cannot see "
+            f"shared printers or other computers on it. Windows switches all sharing "
+            f"off on public networks. That is the right setting in a cafe and the "
+            f"wrong one at home -- only you know which this is."
+        ),
+        hypotheses=[
+            _h(
+                "Windows categorised this network as public when it was first joined.",
+                Domain.CONFIGURATION,
+                0.85,
+                (
+                    "Windows asks once, on first connection, and defaults to public if "
+                    "the prompt is dismissed. The setting then persists silently"
+                    + (
+                        " -- and this is a network already saved on this machine, so it "
+                        "has been joined deliberately before."
+                        if known
+                        else "."
+                    )
+                ),
+            ),
+            _h(
+                "The network genuinely is a public one and the setting is correct.",
+                Domain.ENVIRONMENT,
+                0.15,
+                "If this is a cafe, hotel or airport network, leaving it public is the "
+                "right call and nothing should be changed.",
+            ),
+        ],
+        prefer=("net.profile.private",),
+    )
+
+
+def _proxy_offline(symptom: Symptom, store: ObservationStore) -> Draft:
+    server = symptom.facts.get("proxy_server")
+    return Draft(
+        summary=(
+            f"Your connection itself is fine, but Windows is being told to send every "
+            f"request through a proxy server at {server}, and that server is not "
+            f"answering. Nothing will load until it does, or until the setting goes."
+        ),
+        hypotheses=[
+            _h(
+                "A proxy setting was left behind by software that has since been removed.",
+                Domain.CONFIGURATION,
+                0.7,
+                (
+                    "Free VPNs, ad blockers and some malware set a system proxy and do "
+                    "not clean it up when uninstalled. The result is a machine that is "
+                    "connected to the network but cannot load anything -- with no error "
+                    "message pointing at the proxy."
+                ),
+            ),
+            _h(
+                "The proxy is legitimate and is temporarily down.",
+                Domain.ENVIRONMENT,
+                0.3,
+                "Likely on a work laptop away from the office network. If so, clearing "
+                "the setting will fix browsing now and need putting back on return.",
+            ),
+        ],
+        prefer=("net.proxy.reset",),
+    )
+
+
+def _hosts_override(symptom: Symptom, store: ObservationStore) -> Draft:
+    facts = symptom.facts
+    count = facts.get("entry_count")
+    return Draft(
+        summary=(
+            f"The hosts file on this machine redirects {count} address(es) before any "
+            f"DNS lookup happens. That is invisible to a browser and survives clearing "
+            f"every cache, which is why a site blocked this way seems permanently down."
+        ),
+        hypotheses=[
+            _h(
+                "An ad blocker, privacy tool or parental control wrote these entries.",
+                Domain.CONFIGURATION,
+                0.6,
+                "The most common source by far, and usually intentional -- which is why "
+                "Warden reports them rather than removing them.",
+            ),
+            _h(
+                "An installer or unwanted program redirected these addresses.",
+                Domain.SOFTWARE,
+                0.4,
+                "Redirection to a real address rather than to a blackhole is the "
+                "suspicious pattern, since blocking is what legitimate tools do.",
+            ),
+        ],
+        # No `prefer`: the entry to comment out is a decision for the user, so
+        # the parameter cannot be bound from the symptom alone.
+        force_verdict=Verdict.NEEDS_MORE_DATA,
+        notes=["hosts entries are usually deliberate; the user picks which to disable"],
+    )
+
+
+def _time_not_synced(symptom: Symptom, store: ObservationStore) -> Draft:
+    facts = symptom.facts
+    source = facts.get("source")
+    pending = as_list(facts.get("pending_peers"))
+
+    return Draft(
+        summary=(
+            f"This machine's clock has never been corrected by a time server -- it is "
+            f"free-running on {source}. Nothing looks wrong today, but a clock that "
+            f"nothing corrects drifts, and when it drifts far enough secure websites "
+            f"stop loading and sign-ins start failing, with no message connecting that "
+            f"to the time."
+        ),
+        hypotheses=[
+            _h(
+                "The Windows time service has never reached its configured time server.",
+                Domain.CONFIGURATION,
+                0.8,
+                (
+                    f"The clock reports its source as {source}, meaning no external "
+                    f"correction has ever been applied"
+                    + (
+                        f", and the configured server {pending[0]!r} is still pending."
+                        if pending
+                        else "."
+                    )
+                    + " The service ships set to Manual, so on many machines nothing "
+                    "ever starts it."
+                ),
+            ),
+            _h(
+                "A firewall or network policy is blocking the time protocol.",
+                Domain.ENVIRONMENT,
+                0.2,
+                "Some networks block outbound NTP. If the resync fails, this is the "
+                "reason, and it needs a different time server rather than a fix here.",
+            ),
+        ],
+        prefer=("time.resync",),
+    )
+
+
 HANDLERS: dict[str, Handler] = {
+    "NET.PROFILE_PUBLIC_ON_TRUSTED": _profile_public,
+    "NET.PROXY_CONFIGURED_BUT_OFFLINE": _proxy_offline,
+    "NET.HOSTS_OVERRIDE": _hosts_override,
+    "TIME.NOT_SYNCHRONISED": _time_not_synced,
     "CAM.BLOCKED_BY_PRIVACY": _privacy_blocked,
     "MIC.BLOCKED_BY_PRIVACY": _privacy_blocked,
     "CAM.DEVICE_DISABLED": _camera_disabled,

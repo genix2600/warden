@@ -53,6 +53,7 @@ class Mechanism(StrEnum):
     SOCKET = "socket"
     DOTNET = "dotnet"  # LibreHardwareMonitor via pythonnet
     REGISTRY = "registry"
+    FILE = "file"  # read straight off disk, e.g. the hosts file
     REPLAY = "replay"  # sourced from a recorded session, never from live hardware
 
 

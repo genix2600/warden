@@ -165,6 +165,39 @@ class _StrictParams(dict[str, object]):
         raise KeyError(key)
 
 
+def check_template(playbook: Playbook) -> None:
+    """Fail at import if a playbook's argv template cannot render.
+
+    Templates are Python format strings, so a literal ``{`` in a PowerShell
+    script block -- ``ForEach-Object { ... }`` -- is read as the start of a
+    placeholder. The action then looks perfectly correct in review and is
+    rejected every single time it is proposed, at runtime, in front of a user.
+
+    That happened once during development. Checking every template against its
+    own parameter model when the registry is built turns a silent runtime
+    refusal into a failure to start, which is where this class of mistake
+    belongs. Literal braces must be doubled.
+    """
+    known = set(playbook.params_model.model_fields) | set(
+        playbook.params_model.model_computed_fields
+    )
+    for token in playbook.argv_template:
+        try:
+            referenced = {field for _, field, _, _ in _FORMATTER.parse(token) if field is not None}
+        except ValueError as exc:
+            raise ValueError(
+                f"{playbook.id}: argv token is not a valid template ({exc}). "
+                f"A literal brace in a PowerShell block must be written {{{{ or }}}}. "
+                f"Token: {token!r}"
+            ) from exc
+        unknown = {field for field in referenced if field.split(".")[0].split("[")[0] not in known}
+        if unknown:
+            raise ValueError(
+                f"{playbook.id}: argv template references {sorted(unknown)}, which "
+                f"{playbook.params_model.__name__} does not define. Known: {sorted(known)}"
+            )
+
+
 class PlaybookRegistry:
     """The complete, closed set of things Warden can do.
 
@@ -177,6 +210,8 @@ class PlaybookRegistry:
         duplicates = {p.id for p in playbooks if sum(q.id == p.id for q in playbooks) > 1}
         if duplicates:
             raise ValueError(f"duplicate playbook ids: {sorted(duplicates)}")
+        for playbook in playbooks:
+            check_template(playbook)
         self._by_id = {p.id: p for p in playbooks}
 
     def __contains__(self, action_id: object) -> bool:

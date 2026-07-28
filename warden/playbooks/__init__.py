@@ -25,10 +25,12 @@ from warden.playbooks.base import (
     render_argv,
 )
 from warden.playbooks.devices import DEVICE_PLAYBOOKS
+from warden.playbooks.netconfig import NETCONFIG_PLAYBOOKS
 from warden.playbooks.network import NETWORK_PLAYBOOKS
 from warden.playbooks.predicates import PREDICATES, Predicate
 from warden.playbooks.privacy import PRIVACY_PLAYBOOKS
 from warden.playbooks.services import SERVICE_CANDIDATES, SERVICE_PLAYBOOKS
+from warden.playbooks.timesync import TIME_PLAYBOOKS
 
 __all__ = [
     "CANDIDATES",
@@ -45,7 +47,14 @@ __all__ = [
 ]
 
 REGISTRY = PlaybookRegistry(
-    [*NETWORK_PLAYBOOKS, *DEVICE_PLAYBOOKS, *SERVICE_PLAYBOOKS, *PRIVACY_PLAYBOOKS]
+    [
+        *NETWORK_PLAYBOOKS,
+        *DEVICE_PLAYBOOKS,
+        *SERVICE_PLAYBOOKS,
+        *PRIVACY_PLAYBOOKS,
+        *NETCONFIG_PLAYBOOKS,
+        *TIME_PLAYBOOKS,
+    ]
 )
 
 #: Symptom code -> action ids that may be considered, best first.
@@ -64,6 +73,12 @@ CANDIDATES: dict[str, tuple[str, ...]] = {
     "CAM.BLOCKED_BY_PRIVACY": ("privacy.allow",),
     "MIC.BLOCKED_BY_PRIVACY": ("privacy.allow",),
     "CAM.DEVICE_DISABLED": ("cam.device.enable",),
+    # Invisible misconfiguration: the cause is unfindable from the symptom,
+    # and the fix is one command the user would never guess.
+    "NET.PROFILE_PUBLIC_ON_TRUSTED": ("net.profile.private",),
+    "NET.PROXY_CONFIGURED_BUT_OFFLINE": ("net.proxy.reset",),
+    "NET.HOSTS_OVERRIDE": ("net.hosts.comment",),
+    "TIME.NOT_SYNCHRONISED": ("time.resync",),
     # --- no software fix exists for these -------------------------------
     # The fault is upstream of this machine; nothing run here reaches it.
     "NET.INTERNET.UNREACHABLE": (),
