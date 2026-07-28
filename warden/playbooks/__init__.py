@@ -62,6 +62,11 @@ CANDIDATES: dict[str, tuple[str, ...]] = {
     # Heat is a physical quantity. No command cleans a heatsink.
     "THERMAL.SUSTAINED_THROTTLE": (),
     "THERMAL.HIGH_TEMPERATURE": (),
+    # Capacity is a property of the cells. Software cannot add it back, and
+    # anything claiming to "repair" a battery is lying.
+    "POWER.BATTERY_WORN": (),
+    # A drive that has flagged itself through SMART is failing hardware.
+    "STORAGE.DISK_UNHEALTHY": (),
 }
 
 

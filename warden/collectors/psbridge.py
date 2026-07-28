@@ -200,8 +200,10 @@ class PowerShellBridge:
         """
         started = time.perf_counter()
         for script in (
-            "Import-Module NetAdapter,NetConnection,NetTCPIP,DnsClient "
+            "Import-Module NetAdapter,NetConnection,NetTCPIP,DnsClient,Storage "
             "-ErrorAction SilentlyContinue; ''",
+            # Measured at 4.4s on first call, under 300ms afterwards.
+            "Get-PhysicalDisk | Out-Null; ''",
             "Get-CimInstance Win32_Processor -Property Name | Out-Null; ''",
             "Get-CimInstance Win32_PerfFormattedData_Counters_ProcessorInformation "
             "-Filter \"Name='_Total'\" | Out-Null; ''",

@@ -477,7 +477,130 @@ def _disk_low(symptom: Symptom, store: ObservationStore) -> Draft:
     )
 
 
+# --------------------------------------------------------------------------
+# Physical wear
+# --------------------------------------------------------------------------
+
+
+def _battery_worn(symptom: Symptom, store: ObservationStore) -> Draft:
+    facts = symptom.facts
+    health = as_float(facts.get("health_pct")) or 0.0
+    cycles = as_float(facts.get("cycle_count"))
+    loss = as_float(facts.get("runtime_reduction_pct")) or 0.0
+    expected = bool(facts.get("wear_is_expected_for_age"))
+    cycle_phrase = f" over {cycles:.0f} charge cycles" if cycles else ""
+
+    return Draft(
+        summary=(
+            f"The battery now holds {health:.0f}% of the capacity it shipped with"
+            f"{cycle_phrase}, so you are getting roughly {loss:.0f}% less time on a "
+            f"charge than when the machine was new. Nothing on the computer can "
+            f"restore that."
+        ),
+        hypotheses=[
+            _h(
+                "The battery cells have aged, which every lithium battery does.",
+                Domain.HARDWARE,
+                0.9 if expected else 0.75,
+                (
+                    f"Capacity has fallen to {health:.0f}% of design{cycle_phrase}. "
+                    + (
+                        "That is normal wear for this many cycles rather than a fault."
+                        if expected
+                        else "That is more loss than the cycle count alone would explain, "
+                        "which can point at sustained heat or long periods held at full charge."
+                    )
+                ),
+            ),
+            _h(
+                "The battery reports its capacity incorrectly after a firmware or "
+                "calibration issue.",
+                Domain.HARDWARE,
+                0.1,
+                "Uncommon, and distinguished by a full discharge-and-recharge cycle "
+                "changing the reported figure. Worth mentioning before paying for a "
+                "replacement.",
+            ),
+        ],
+        advice=ServiceAdvice(
+            reason=(
+                "Battery capacity is a physical property of the cells. There is no "
+                "setting, driver or command that adds capacity back, and any software "
+                "claiming to 'repair' a battery is not telling the truth."
+            ),
+            who="technician",
+            next_step=(
+                f"Ask for a battery replacement and quote the measurement: "
+                f"{facts.get('full_charge_mwh')} mWh full charge against a "
+                f"{facts.get('design_mwh')} mWh design capacity"
+                + (f" at {cycles:.0f} cycles" if cycles else "")
+                + ". That is the number a service centre will check for themselves."
+            ),
+            interim_mitigation=(
+                "Keep the charger with you, and expect the remaining-time estimate to "
+                "be optimistic. Avoid leaving it at 100% on mains for long periods, "
+                "which accelerates the remaining wear."
+            ),
+            urgency="routine" if health >= 60 else "soon",
+        ),
+        force_verdict=Verdict.NEEDS_SERVICE,
+    )
+
+
+def _disk_unhealthy(symptom: Symptom, store: ObservationStore) -> Draft:
+    facts = symptom.facts
+    name = facts.get("name")
+    return Draft(
+        summary=(
+            f"{name} is reporting a hardware fault through its own health monitoring. "
+            f"Back up anything you care about now, before doing anything else."
+        ),
+        hypotheses=[
+            _h(
+                "The drive is failing and has flagged itself.",
+                Domain.HARDWARE,
+                0.85,
+                (
+                    f"The storage stack reports {facts.get('health')!r} for this drive. "
+                    "That status comes from the drive's own SMART monitoring, which "
+                    "reports a problem only after its internal thresholds have been "
+                    "crossed. It is not a guess by Warden."
+                ),
+            ),
+            _h(
+                "A connection or controller fault is making a healthy drive look bad.",
+                Domain.HARDWARE,
+                0.15,
+                "Possible, particularly for a drive on a cable rather than soldered "
+                "down, and worth a technician checking before the drive is replaced.",
+            ),
+        ],
+        advice=ServiceAdvice(
+            reason=(
+                "A drive reporting a SMART fault is failing hardware. No command "
+                "repairs failing storage, and continuing to write to it risks the data "
+                "still on it."
+            ),
+            who="technician",
+            next_step=(
+                f"Tell them the drive is a {facts.get('size_gb')} GB "
+                f"{facts.get('media_type')} reporting health status "
+                f"{facts.get('health')!r}, and ask for it to be replaced and the data "
+                f"migrated. Bring a backup with you in case it fails during the work."
+            ),
+            interim_mitigation=(
+                "Copy your important files to another drive or cloud storage today. "
+                "Treat every start-up from now on as possibly the last one."
+            ),
+            urgency="urgent",
+        ),
+        force_verdict=Verdict.NEEDS_SERVICE,
+    )
+
+
 HANDLERS: dict[str, Handler] = {
+    "POWER.BATTERY_WORN": _battery_worn,
+    "STORAGE.DISK_UNHEALTHY": _disk_unhealthy,
     "NET.WIFI.DISCONNECTED": _wifi_disconnected,
     "NET.WIFI.RADIO_OFF": _wifi_radio_off,
     "NET.WIFI.NO_ADAPTER": _wifi_no_adapter,

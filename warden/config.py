@@ -60,6 +60,21 @@ class Thresholds:
     """A single process holding this share of the whole machine explains the heat
     by itself, and the answer is about that process rather than about cooling."""
 
+    # -- battery --------------------------------------------------------
+    battery_worn_pct: float = 80.0
+    """Full-charge capacity as a percentage of the original design capacity,
+    below which the battery is worn enough to be worth mentioning. Lithium cells
+    lose capacity from the day they are made; 80% is the figure most
+    manufacturers themselves use as the end of warranty coverage."""
+
+    battery_failed_pct: float = 60.0
+    """Below this the battery is effectively spent and runtime will be poor."""
+
+    battery_high_cycles: int = 800
+    """Cycle count beyond which wear is expected rather than surprising. Used to
+    phrase the advice, not to trigger it -- a 900-cycle battery still holding 90%
+    is a good battery."""
+
     # -- storage --------------------------------------------------------
     disk_low_percent_used: float = 92.0
     disk_low_free_gb: float = 12.0
