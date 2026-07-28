@@ -23,6 +23,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from warden.collectors.services import BY_NAME as _WATCHED_SERVICES
 from warden.contracts import (
     ActionProposal,
     Diagnosis,
@@ -598,6 +599,92 @@ def _disk_unhealthy(symptom: Symptom, store: ObservationStore) -> Draft:
     )
 
 
+# --------------------------------------------------------------------------
+# Windows services
+# --------------------------------------------------------------------------
+
+
+def _service_stopped(symptom: Symptom, store: ObservationStore) -> Draft:
+    """One handler for six subsystems, because the reasoning genuinely is the same.
+
+    The distinction that matters is disabled versus merely stopped: a disabled
+    service will refuse to start, and even if forced it would not come back after
+    a reboot, so the two need different actions and different explanations.
+    """
+    facts = symptom.facts
+    subsystem = facts.get("subsystem")
+    display = facts.get("display_name")
+    disabled = bool(facts.get("is_disabled"))
+    consequence = facts.get("consequence")
+
+    if disabled:
+        return Draft(
+            summary=(
+                f"Your {subsystem} is not working because the Windows service behind "
+                f"it has been switched off entirely, which means {consequence}. It "
+                f"will not come back on its own, or after a restart."
+            ),
+            hypotheses=[
+                _h(
+                    f"{display} was set to Disabled, by an administrator, a "
+                    f"clean-up utility, or an installer.",
+                    Domain.CONFIGURATION,
+                    0.8,
+                    (
+                        "A disabled service is a deliberate setting rather than a "
+                        "crash -- Windows does not disable services by itself. "
+                        '"Optimiser" tools frequently disable this one to make a '
+                        "start-up list look shorter."
+                    ),
+                ),
+                _h(
+                    "A policy set by an organisation is enforcing it off.",
+                    Domain.CONFIGURATION,
+                    0.2,
+                    "Likely on a work or school machine, and if so Warden's change "
+                    "will be reverted the next time policy is applied.",
+                ),
+            ],
+            prefer=("sys.service.enable",),
+        )
+
+    return Draft(
+        summary=(
+            f"Your {subsystem} is not working because the Windows service behind it "
+            f"has stopped, which means {consequence}. It is set to start "
+            f"automatically, so it stopping is not normal."
+        ),
+        hypotheses=[
+            _h(
+                f"{display} stopped or crashed and Windows did not restart it.",
+                Domain.SOFTWARE,
+                0.7,
+                (
+                    "The service is configured to start automatically but is not "
+                    "running, so something stopped it. Starting it again is both the "
+                    "diagnosis and the fix -- if it stays up, that was the whole "
+                    "problem."
+                ),
+            ),
+            _h(
+                "Something it depends on failed, and it stopped as a consequence.",
+                Domain.SOFTWARE,
+                0.2,
+                "Distinguished cheaply: if it stops again immediately after being "
+                "started, the cause is underneath it rather than in the service itself.",
+            ),
+            _h(
+                "A driver or device the service needs has failed.",
+                Domain.DRIVER,
+                0.1,
+                "More likely for audio, Bluetooth and camera than for printing or "
+                "search, and would show up as a faulted device as well.",
+            ),
+        ],
+        prefer=("sys.service.restart",),
+    )
+
+
 HANDLERS: dict[str, Handler] = {
     "POWER.BATTERY_WORN": _battery_worn,
     "STORAGE.DISK_UNHEALTHY": _disk_unhealthy,
@@ -611,6 +698,11 @@ HANDLERS: dict[str, Handler] = {
     "THERMAL.HIGH_TEMPERATURE": _thermal,
     "DEV.DEVICE_FAULT": _device_fault,
     "SYS.DISK_LOW": _disk_low,
+    # Six subsystems, one handler. Built from the same table the collector and
+    # the candidate map use, so a new watched service needs no change here.
+    **dict.fromkeys(
+        (service.symptom_code for service in _WATCHED_SERVICES.values()), _service_stopped
+    ),
 }
 
 

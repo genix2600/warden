@@ -17,6 +17,7 @@ from collections.abc import Callable
 
 from pydantic import JsonValue
 
+from warden.collectors.services import status_name
 from warden.store import ObservationStore
 
 #: (passed, human-readable detail). ``passed`` of None means inconclusive.
@@ -85,6 +86,27 @@ def device_healthy(store: ObservationStore, args: dict[str, JsonValue]) -> tuple
     return True, "the device no longer reports a problem code"
 
 
+def service_running(store: ObservationStore, args: dict[str, JsonValue]) -> tuple[bool | None, str]:
+    """Did the named Windows service actually come up?
+
+    Checks the re-read service table rather than the command's exit code.
+    ``Start-Service`` can return successfully for a service that then stops again
+    a second later because a dependency is missing, which is precisely the case
+    an exit code cannot distinguish from success.
+    """
+    observation = store.latest("sys.services")
+    if observation is None or not isinstance(observation.value, list):
+        return None, "no service reading is available to check"
+    wanted = args.get("service")
+    for raw in observation.value:
+        if isinstance(raw, dict) and raw.get("name") == wanted:
+            display = raw.get("display_name") or wanted
+            if raw.get("status") == 4:
+                return True, f"{display} is now running"
+            return False, f"{display} is still {status_name(raw.get('status'))}"
+    return None, f"{wanted} was not present in the service reading"
+
+
 def report_only(store: ObservationStore, args: dict[str, JsonValue]) -> tuple[bool | None, str]:
     """For READ_ONLY actions: success means the command produced its report.
 
@@ -101,5 +123,6 @@ PREDICATES: dict[str, Predicate] = {
     "net.dns_resolves": dns_resolves,
     "net.gateway_reachable": gateway_reachable,
     "device.healthy": device_healthy,
+    "service.running": service_running,
     "report.only": report_only,
 }

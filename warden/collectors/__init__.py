@@ -20,6 +20,7 @@ from warden.collectors.base import Collector
 from warden.collectors.hardware import BatteryCollector, StorageHealthCollector
 from warden.collectors.network import ConnectivityCollector, WifiCollector
 from warden.collectors.psbridge import PowerShellBridge
+from warden.collectors.services import ServiceCollector
 from warden.collectors.system import ProcessCollector, SystemCollector
 from warden.collectors.thermal import ThermalCollector
 from warden.collectors.windows import DeviceCollector, EventLogCollector
@@ -35,6 +36,7 @@ __all__ = [
     "DeviceCollector",
     "EventLogCollector",
     "ProcessCollector",
+    "ServiceCollector",
     "StorageHealthCollector",
     "SystemCollector",
     "ThermalCollector",
@@ -54,6 +56,7 @@ def build_default_collectors(bridge: PowerShellBridge) -> list[Collector]:
         EventLogCollector(bridge),
         BatteryCollector(bridge),
         StorageHealthCollector(bridge),
+        ServiceCollector(bridge),
     ]
 
 

@@ -27,6 +27,7 @@ from warden.playbooks.base import (
 from warden.playbooks.devices import DEVICE_PLAYBOOKS
 from warden.playbooks.network import NETWORK_PLAYBOOKS
 from warden.playbooks.predicates import PREDICATES, Predicate
+from warden.playbooks.services import SERVICE_CANDIDATES, SERVICE_PLAYBOOKS
 
 __all__ = [
     "CANDIDATES",
@@ -42,7 +43,7 @@ __all__ = [
     "render_argv",
 ]
 
-REGISTRY = PlaybookRegistry([*NETWORK_PLAYBOOKS, *DEVICE_PLAYBOOKS])
+REGISTRY = PlaybookRegistry([*NETWORK_PLAYBOOKS, *DEVICE_PLAYBOOKS, *SERVICE_PLAYBOOKS])
 
 #: Symptom code -> action ids that may be considered, best first.
 #: An empty tuple is a deliberate statement, not an oversight.
@@ -52,6 +53,9 @@ CANDIDATES: dict[str, tuple[str, ...]] = {
     "NET.GATEWAY.UNREACHABLE": ("net.dhcp.renew", "net.adapter.restart"),
     "DEV.DEVICE_FAULT": ("dev.driver.restart",),
     "SYS.DISK_LOW": ("sys.disk.temp_report",),
+    # Printing, audio, Bluetooth, update, search and camera all reduce to
+    # "start the service behind it", so they share one pair of actions.
+    **SERVICE_CANDIDATES,
     # --- no software fix exists for these -------------------------------
     # The fault is upstream of this machine; nothing run here reaches it.
     "NET.INTERNET.UNREACHABLE": (),
