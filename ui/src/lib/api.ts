@@ -1,5 +1,11 @@
 /** Thin fetch helpers. The API is on the same origin the shell loaded from. */
-import type { AgentSnapshot, CapabilityReport, DoctorReport, Incident } from "../types";
+import type {
+  AgentSnapshot,
+  CapabilityReport,
+  DoctorReport,
+  DomainHealth,
+  Incident,
+} from "../types";
 
 async function json<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -23,6 +29,7 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   state: () => json<AgentSnapshot>("/api/state"),
+  domains: () => json<DomainHealth[]>("/api/domains"),
   actions: () => json<CapabilityReport>("/api/actions"),
   doctor: () => json<DoctorReport>("/api/doctor"),
   approve: (id: string) => json<Incident>(`/api/incidents/${id}/approve`, { method: "POST" }),

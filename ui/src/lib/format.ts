@@ -76,6 +76,46 @@ export function riskLabel(risk: string): string {
   );
 }
 
+/** Domain health states, mapped to the fixed status palette.
+ *
+ * `unknown` is deliberately not "good". A collector that failed is not evidence
+ * of health, and colouring it green would be the exact dishonesty this product
+ * argues against.
+ */
+export function domainTone(state: string): StatusTone {
+  return (
+    {
+      ok: "good",
+      note: "idle",
+      attention: "warning",
+      problem: "critical",
+      unknown: "idle",
+    } as const
+  )[state as "ok"] ?? "idle";
+}
+
+export function domainLabel(state: string): string {
+  return (
+    {
+      ok: "Fine",
+      note: "Worth knowing",
+      attention: "Needs a look",
+      problem: "Problem",
+      unknown: "Can't tell",
+    }[state] ?? state
+  );
+}
+
+/** A compact, non-technical rendering of an observation value for a card. */
+export function briefValue(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "boolean") return value ? "yes" : "no";
+  if (typeof value === "number") return Number.isInteger(value) ? String(value) : value.toFixed(1);
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return `${value.length} item${value.length === 1 ? "" : "s"}`;
+  return null;
+}
+
 export function toneClass(tone: StatusTone): string {
   return {
     good: "text-good",

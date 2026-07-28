@@ -1,78 +1,88 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { api } from "./lib/api";
-import { useWarden } from "./lib/useWarden";
-import type { Observation } from "./types";
-import { AgentLog } from "./components/AgentLog";
+import { isTerminal, useWarden } from "./lib/useWarden";
+import type { Observation, PageId } from "./types";
 import { DemoBar } from "./components/DemoBar";
-import { DoctorPanel } from "./components/DoctorPanel";
 import { EvidenceDrawer } from "./components/EvidenceDrawer";
 import { Header } from "./components/Header";
-import { IncidentStage } from "./components/IncidentStage";
-import { TelemetryPanel } from "./components/TelemetryPanel";
+import { Sidebar } from "./components/Sidebar";
+import { Capabilities } from "./pages/Capabilities";
+import { Evidence } from "./pages/Evidence";
+import { Health } from "./pages/Health";
+import { History } from "./pages/History";
+import { Overview } from "./pages/Overview";
+import { Readiness } from "./pages/Readiness";
 
 export default function App() {
-  const { state, focus, refresh } = useWarden();
+  const { state, incidents, focus, refresh } = useWarden();
+  const [page, setPage] = useState<PageId>("overview");
   const [inspecting, setInspecting] = useState<Observation | null>(null);
-  const [doctorOpen, setDoctorOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  // Evidence is cited by id. Most cited readings are still in the live
-  // telemetry map; anything older is fetched, since the backend keeps a longer
-  // history than the interface does.
-  const lookup = useCallback(
-    (id: string): Observation | undefined =>
-      Object.values(state.telemetry).find((observation) => observation.id === id),
-    [state.telemetry],
-  );
+  const decide = useCallback(async (id: string, choice: "approve" | "decline") => {
+    setBusy(true);
+    try {
+      await (choice === "approve" ? api.approve(id) : api.decline(id));
+    } finally {
+      setBusy(false);
+    }
+  }, []);
 
-  const decide = useCallback(
-    async (id: string, choice: "approve" | "decline") => {
-      setBusy(true);
-      try {
-        await (choice === "approve" ? api.approve(id) : api.decline(id));
-      } finally {
-        setBusy(false);
-      }
-    },
-    [],
+  // Only things genuinely awaiting a human decision earn a badge. A count of
+  // "open incidents" would include everything Warden is quietly working
+  // through, which trains people to ignore the number.
+  const awaitingApproval = useMemo(
+    () => incidents.filter((i) => i.state === "awaiting_approval").length,
+    [incidents],
   );
+  const open = useMemo(() => incidents.filter((i) => !isTerminal(i.state)).length, [incidents]);
 
   return (
-    <div className="flex h-full flex-col bg-plane">
-      <Header
-        snapshot={state.snapshot}
-        connected={state.connected}
-        desynced={state.desynced}
-        onResync={() => void refresh()}
-        onOpenDoctor={() => setDoctorOpen(true)}
+    <div className="flex h-full bg-plane">
+      <Sidebar
+        page={page}
+        onNavigate={setPage}
+        needsAttention={awaitingApproval}
+        openIncidents={open}
       />
 
-      <main className="grid min-h-0 flex-1 grid-cols-[300px_minmax(0,1fr)_290px] gap-4 p-4">
-        <TelemetryPanel
-          telemetry={state.telemetry}
-          series={state.series}
-          collectors={state.snapshot?.collectors ?? []}
-          onInspect={setInspecting}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Header
+          snapshot={state.snapshot}
+          connected={state.connected}
+          desynced={state.desynced}
+          onResync={() => void refresh()}
+          onOpenDoctor={() => setPage("readiness")}
         />
 
-        <IncidentStage
-          incident={focus}
-          monitoring={state.snapshot?.monitoring ?? false}
-          output={focus ? (state.output[focus.id] ?? []) : []}
-          observationsById={lookup}
-          onInspect={setInspecting}
-          onApprove={(id) => decide(id, "approve")}
-          onDecline={(id) => decide(id, "decline")}
-          busy={busy}
-        />
+        <main className="min-h-0 flex-1">
+          {page === "overview" && (
+            <Overview
+              state={state}
+              focus={focus}
+              log={state.log}
+              onInspect={setInspecting}
+              onApprove={(id) => decide(id, "approve")}
+              onDecline={(id) => decide(id, "decline")}
+              onSeeHealth={() => setPage("health")}
+              busy={busy}
+            />
+          )}
+          {page === "health" && (
+            <Health onInspect={setInspecting} tick={state.snapshot?.tick ?? 0} />
+          )}
+          {page === "history" && <History incidents={incidents} />}
+          {page === "capabilities" && <Capabilities />}
+          {page === "evidence" && (
+            <Evidence telemetry={state.telemetry} onInspect={setInspecting} />
+          )}
+          {page === "readiness" && <Readiness snapshot={state.snapshot} />}
+        </main>
 
-        <AgentLog lines={state.log} />
-      </main>
-
-      <DemoBar />
+        <DemoBar />
+      </div>
 
       <EvidenceDrawer observation={inspecting} onClose={() => setInspecting(null)} />
-      {doctorOpen && <DoctorPanel onClose={() => setDoctorOpen(false)} />}
     </div>
   );
 }

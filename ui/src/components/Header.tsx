@@ -18,13 +18,17 @@ export function Header({
   const reasoner = snapshot?.reasoner;
 
   return (
-    <header className="flex items-center gap-3 border-b border-hairline bg-surface px-4 py-2.5">
-      <div className="flex items-baseline gap-2">
-        <span className="text-sm font-bold tracking-tight text-ink">WARDEN</span>
-        <span className="text-[10px] uppercase tracking-wider text-muted">
-          system diagnostician
-        </span>
-      </div>
+    <header className="flex items-center gap-3 border-b border-hairline bg-surface px-5 py-2">
+      <StatusDot
+        tone={connected ? (snapshot?.monitoring ? "good" : "idle") : "critical"}
+        label={
+          connected
+            ? snapshot?.monitoring
+              ? "Watching this machine"
+              : "Paused"
+            : "Not connected"
+        }
+      />
 
       {/* A replayed session is labelled permanently and unmistakably. Recorded
           data presented as live would destroy the only thing this tool sells. */}
@@ -69,10 +73,6 @@ export function Header({
           Readiness
         </button>
 
-        <StatusDot
-          tone={connected ? (snapshot?.monitoring ? "good" : "idle") : "critical"}
-          label={connected ? (snapshot?.monitoring ? "monitoring" : "idle") : "disconnected"}
-        />
       </div>
     </header>
   );

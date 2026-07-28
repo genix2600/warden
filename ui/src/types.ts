@@ -23,6 +23,7 @@ export type ServiceAdvice = S["ServiceAdvice"];
 export type ExecutionRecord = S["ExecutionRecord"];
 export type VerificationResult = S["VerificationResult"];
 export type CollectorHealth = S["CollectorHealth"];
+export type DomainHealth = S["DomainHealth"];
 export type ReasonerHealth = S["ReasonerHealth"];
 export type DoctorReport = S["DoctorReport"];
 export type CapabilityReport = S["CapabilityReport"];
@@ -70,3 +71,13 @@ export interface OutputLine {
 }
 
 export type StatusTone = "good" | "warning" | "serious" | "critical" | "idle";
+
+/** The pages in the desktop shell. A plain union rather than a router: this is
+ *  a fixed-size desktop window with no deep links and no browser history. */
+export type PageId =
+  | "overview"
+  | "health"
+  | "history"
+  | "capabilities"
+  | "evidence"
+  | "readiness";

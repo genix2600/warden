@@ -24,8 +24,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from warden.contracts import ActionSpec, AgentEvent, Incident
-from warden.contracts.state import AgentSnapshot
+from warden.contracts.state import AgentSnapshot, DomainHealth
 from warden.demo import DemoHarness
+from warden.domains import DOMAINS, summarise
 from warden.orchestrator import Agent, SessionRecorder
 from warden.playbooks import CANDIDATES, REGISTRY
 from warden.reasoner.llm import DEFAULT_MODEL
@@ -113,6 +114,36 @@ def _routes(agent: Agent, harness: DemoHarness) -> APIRouter:
             candidates_by_symptom={k: list(v) for k, v in CANDIDATES.items()},
             symptoms_with_no_software_fix=sorted(k for k, v in CANDIDATES.items() if not v),
         )
+
+    @router.get("/domains", response_model=list[DomainHealth])
+    async def get_domains() -> list[DomainHealth]:
+        """The machine broken into the parts a person recognises.
+
+        Computed fresh from the current symptoms and collector health, so a
+        domain can never report "fine" because a stale summary said so.
+        """
+        snapshot = agent.snapshot()
+        by_id = {c.id: c for c in snapshot.collectors}
+        active = snapshot.active_symptoms
+        return [
+            DomainHealth(
+                id=domain.id,
+                label=domain.label,
+                blurb=domain.blurb,
+                icon=domain.icon,
+                state=(summary := summarise(domain, active, by_id))[0],
+                headline=summary[1],
+                symptom_codes=list(domain.symptoms),
+                active_symptoms=[s for s in active if s.code in domain.symptoms],
+                collectors=list(domain.collectors),
+                highlights={
+                    source: observation
+                    for source in domain.highlights
+                    if (observation := agent.store.latest(source)) is not None
+                },
+            )
+            for domain in DOMAINS
+        ]
 
     @router.get("/events/recent", response_model=list[AgentEvent])
     async def recent_events(since: int = 0) -> list[Any]:
