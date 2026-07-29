@@ -67,3 +67,35 @@ def test_data_path_survives_a_missing_localappdata(
 def test_data_path_does_not_touch_the_filesystem(frozen: Path) -> None:
     """Import-time side effects are how test suites become order-dependent."""
     assert not paths.data_path("sessions").exists()
+
+
+class TestWindowedOutput:
+    """A build with no console must still be able to say why it failed.
+
+    PyInstaller's ``console=False`` leaves ``sys.stdout`` and ``sys.stderr`` set
+    to None. Warden crashed on launch this way once: uvicorn's colour formatter
+    called ``sys.stdout.isatty()`` while building its logging config, and the
+    application died before the window appeared, with the traceback going
+    nowhere because there was nowhere for it to go.
+    """
+
+    def test_absent_streams_are_replaced_with_a_log_file(
+        self, frozen: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from warden.__main__ import _redirect_output_to_a_log_file
+
+        monkeypatch.setattr(sys, "stdout", None)
+        monkeypatch.setattr(sys, "stderr", None)
+        path = _redirect_output_to_a_log_file()
+
+        assert path is not None and path.exists()
+        assert sys.stdout is not None and sys.stderr is not None
+        # The specific call that brought the application down.
+        assert sys.stdout.isatty() is False
+        sys.stdout.close()
+
+    def test_a_real_console_is_left_alone(self) -> None:
+        """Running from a terminal, output must keep going to the terminal."""
+        from warden.__main__ import _redirect_output_to_a_log_file
+
+        assert _redirect_output_to_a_log_file() is None

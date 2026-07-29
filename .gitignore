@@ -19,6 +19,10 @@ ui/openapi.json
 # Third-party sensor library, fetched by scripts/fetch-sensors.ps1 (MPL-2.0, not vendored)
 vendor/
 
+# PyInstaller output. warden.spec is committed; the 45 MB it produces is not.
+build/
+dist/
+
 # Runtime state: recorded sessions from live runs. fixtures/ IS committed; sessions/ is not.
 sessions/
 

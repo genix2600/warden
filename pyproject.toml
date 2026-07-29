@@ -22,6 +22,9 @@ dev = [
     "mypy>=1.13",
     "types-psutil>=6.1",
 ]
+# Only needed to produce Warden.exe. Kept out of dev so that contributing to
+# Warden does not mean installing a packaging toolchain.
+build = ["pyinstaller>=6.11"]
 
 [project.scripts]
 warden = "warden.__main__:main"

@@ -13,17 +13,42 @@ import socket
 import sys
 import threading
 import time
+from pathlib import Path
 
 import uvicorn
 
 from warden.api import create_app
 from warden.orchestrator import Agent
+from warden.paths import data_path
 from warden.reasoner import OllamaClient, Reasoner
 from warden.winenv import is_windows
 
 log = logging.getLogger(__name__)
 
 WINDOW_TITLE = "Warden"
+
+
+def _redirect_output_to_a_log_file() -> Path | None:
+    """Give a windowed build somewhere to write, and somewhere to crash.
+
+    A PyInstaller executable built with ``console=False`` has no console, so
+    ``sys.stdout`` and ``sys.stderr`` are ``None``. Any library that reaches for
+    them dies on import of its own logging config -- uvicorn's colour formatter
+    calls ``sys.stdout.isatty()`` and brings the whole application down before
+    the window ever appears.
+
+    Pointing them at a file fixes that, and fixes the larger problem it exposed:
+    a GUI application that cannot print has no way to tell anyone why it failed.
+    Now it can, and the path is in the README.
+    """
+    if sys.stdout is not None and sys.stderr is not None:
+        return None
+    path = data_path("logs", "warden.log")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle = path.open("a", encoding="utf-8", buffering=1)
+    sys.stdout = handle
+    sys.stderr = handle
+    return path
 
 
 def _free_port() -> int:
@@ -33,7 +58,16 @@ def _free_port() -> int:
         return int(sock.getsockname()[1])
 
 
-def _wait_for_server(port: int, timeout_s: float = 20.0) -> bool:
+#: Uvicorn does not open its listening socket until application startup has
+#: finished, and Warden's startup warms the PowerShell host -- loading the
+#: NetAdapter and Storage modules and priming Get-PhysicalDisk, which alone
+#: costs 4.4s cold. From a frozen bundle on a first run, with Defender
+#: inspecting 45 MB of newly written files at the same time, that comfortably
+#: exceeds 20s. Waiting too briefly turns a slow start into "it doesn't work".
+_SERVER_START_TIMEOUT_S = 90.0
+
+
+def _wait_for_server(port: int, timeout_s: float = _SERVER_START_TIMEOUT_S) -> bool:
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
         try:
@@ -45,6 +79,10 @@ def _wait_for_server(port: int, timeout_s: float = 20.0) -> bool:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Before anything that might log, and before uvicorn builds its logging
+    # configuration: a windowed build has no streams for either to write to.
+    log_file = _redirect_output_to_a_log_file()
+
     parser = argparse.ArgumentParser(prog="warden", description=__doc__)
     parser.add_argument("--headless", action="store_true", help="run the server without a window")
     parser.add_argument("--port", type=int, default=0, help="0 picks a free port")
@@ -59,6 +97,8 @@ def main(argv: list[str] | None = None) -> int:
         format="%(asctime)s %(levelname)-7s %(name)-28s %(message)s",
         datefmt="%H:%M:%S",
     )
+    if log_file is not None:
+        log.info("no console available; this run is being logged to %s", log_file)
 
     if not is_windows():
         log.error("Warden reads Windows-specific interfaces and only runs on Windows.")
