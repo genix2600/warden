@@ -23,6 +23,10 @@ vendor/
 build/
 dist/
 
+# Bundled model runtime: ollama.exe plus ~1 GB of weights, staged by
+# scripts/fetch-model.ps1. Third-party binaries do not belong in the history.
+runtime/
+
 # Runtime state: recorded sessions from live runs. fixtures/ IS committed; sessions/ is not.
 sessions/
 

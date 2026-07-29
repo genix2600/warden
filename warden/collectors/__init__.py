@@ -16,6 +16,7 @@ import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
 
+from warden.collectors.audit import AuditSettingsCollector
 from warden.collectors.base import Collector
 from warden.collectors.hardware import BatteryCollector, StorageHealthCollector
 from warden.collectors.netconfig import NetConfigCollector
@@ -66,6 +67,7 @@ def build_default_collectors(bridge: PowerShellBridge) -> list[Collector]:
         PrivacyCollector(bridge),
         NetConfigCollector(bridge),
         TimeSyncCollector(bridge),
+        AuditSettingsCollector(bridge),
     ]
 
 

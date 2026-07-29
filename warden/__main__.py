@@ -21,6 +21,8 @@ from warden.api import create_app
 from warden.orchestrator import Agent
 from warden.paths import data_path
 from warden.reasoner import OllamaClient, Reasoner
+from warden.reasoner.host import ModelHost
+from warden.reasoner.llm import DEFAULT_ENDPOINT, DEFAULT_MODEL
 from warden.winenv import is_windows
 
 log = logging.getLogger(__name__)
@@ -104,7 +106,18 @@ def main(argv: list[str] | None = None) -> int:
         log.error("Warden reads Windows-specific interfaces and only runs on Windows.")
         return 2
 
-    client = OllamaClient(model=args.model) if args.model else OllamaClient()
+    # Start the bundled model runtime before the agent, so the first incident
+    # finds a model already listening rather than racing it. Absent runtime is
+    # a supported configuration: the client then talks to whatever Ollama the
+    # user has, and failing that the rules engine answers.
+    model_host = ModelHost()
+    endpoint = None if args.no_llm else model_host.start()
+
+    client = OllamaClient(
+        endpoint=endpoint or DEFAULT_ENDPOINT,
+        model=args.model or DEFAULT_MODEL,
+    )
+
     agent = Agent(reasoner=Reasoner(client=client, use_llm=not args.no_llm))
     app = create_app(agent, record=not args.no_record)
     port = args.port or _free_port()
@@ -114,32 +127,38 @@ def main(argv: list[str] | None = None) -> int:
     )
     server = uvicorn.Server(config)
 
-    if args.headless:
-        log.info("Warden listening on http://127.0.0.1:%d", port)
-        server.run()
+    # The model runtime is a child process, so it outlives a crash unless it is
+    # explicitly reaped. A stray ollama.exe holding a model in memory after
+    # Warden has gone is exactly the kind of thing that gets a tool uninstalled.
+    try:
+        if args.headless:
+            log.info("Warden listening on http://127.0.0.1:%d", port)
+            server.run()
+            return 0
+
+        thread = threading.Thread(target=server.run, name="warden-server", daemon=True)
+        thread.start()
+        if not _wait_for_server(port):
+            log.error("the local server did not start; try --headless to see why")
+            return 1
+
+        import webview  # imported late so --headless does not require a GUI stack
+
+        webview.create_window(
+            WINDOW_TITLE,
+            f"http://127.0.0.1:{port}/",
+            width=1440,
+            height=920,
+            min_size=(1080, 720),
+            background_color="#0B0F14",
+        )
+        # Blocks until the window closes; uvicorn is a daemon thread and goes with it.
+        webview.start()
+        server.should_exit = True
+        thread.join(timeout=5)
         return 0
-
-    thread = threading.Thread(target=server.run, name="warden-server", daemon=True)
-    thread.start()
-    if not _wait_for_server(port):
-        log.error("the local server did not start; try --headless to see why")
-        return 1
-
-    import webview  # imported late so --headless does not require a GUI stack
-
-    webview.create_window(
-        WINDOW_TITLE,
-        f"http://127.0.0.1:{port}/",
-        width=1440,
-        height=920,
-        min_size=(1080, 720),
-        background_color="#0B0F14",
-    )
-    # Blocks until the window closes; uvicorn is a daemon thread and goes with it.
-    webview.start()
-    server.should_exit = True
-    thread.join(timeout=5)
-    return 0
+    finally:
+        model_host.stop()
 
 
 if __name__ == "__main__":

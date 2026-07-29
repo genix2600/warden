@@ -27,22 +27,30 @@ from pydantic import BaseModel, ConfigDict, Field
 log = logging.getLogger(__name__)
 
 DEFAULT_ENDPOINT = "http://127.0.0.1:11434"
-#: Chosen for instruction-following and reliable structured output at a size that
-#: fits a student laptop. Overridable, because the right answer depends on the
-#: machine Warden is installed on.
-DEFAULT_MODEL = "qwen2.5:7b-instruct"
-FALLBACK_MODELS = ("qwen2.5:3b-instruct", "llama3.1:8b", "phi3.5")
+#: Small deliberately. The model's job here is narrow: pick one id from a
+#: candidate set that usually holds a single entry, and write two sentences
+#: inside a schema it cannot break. That is classification plus short
+#: generation, not open reasoning, and it does not need a large model.
+#:
+#: The constraint that decides it is the machine. Warden ships to laptops with
+#: no discrete GPU, where inference is four CPU cores: measured on an
+#: i5-1135G7, a 7B model produces 4-6 tokens/s, so a 300-token decision takes
+#: 60-100s and never finishes inside the timeout below. A large model that
+#: always times out is strictly worse than a small one that answers, which is
+#: why the fallbacks are ordered smallest-first rather than best-first.
+DEFAULT_MODEL = "qwen2.5:1.5b-instruct"
+FALLBACK_MODELS = ("qwen2.5:3b-instruct", "llama3.2:3b", "phi3.5", "qwen2.5:7b-instruct")
 
 
 class LlmHypothesis(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    cause: str = Field(description="One sentence, in plain language.")
+    cause: str = Field(max_length=160, description="One sentence, in plain language.")
     domain: Literal["software", "configuration", "driver", "hardware", "environment"]
     likelihood: float
-    reasoning: str
-    supporting: list[str] = Field(default_factory=list)
-    contradicting: list[str] = Field(default_factory=list)
+    reasoning: str = Field(max_length=400)
+    supporting: list[str] = Field(default_factory=list, max_length=4)
+    contradicting: list[str] = Field(default_factory=list, max_length=4)
 
 
 class LlmDecision(BaseModel):
@@ -56,8 +64,15 @@ class LlmDecision(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    summary: str
-    hypotheses: list[LlmHypothesis]
+    summary: str = Field(max_length=300)
+    #: Two, not "as many as it likes". Decision latency on a CPU-only machine is
+    #: dominated by tokens generated, so bounding the output is a larger lever
+    #: than choosing a smaller model -- and because Pydantic emits these bounds
+    #: as ``maxItems``/``maxLength`` into the JSON schema, Ollama's constrained
+    #: decoding enforces them *during* generation rather than truncating after,
+    #: which is where the time is actually saved. It is also better interface:
+    #: nobody ever read the third hypothesis.
+    hypotheses: list[LlmHypothesis] = Field(max_length=2)
     verdict: Literal["actionable", "needs_service", "needs_more_data"]
     action_id: str = ""
     params: dict[str, str] = Field(default_factory=dict)
@@ -130,6 +145,11 @@ class OllamaClient:
             # JSON, it is prevented from emitting anything else.
             "format": LlmDecision.model_json_schema(),
             "options": {"temperature": 0.1, "num_ctx": 8192},
+            # Keep the weights resident between incidents. Loading a model off
+            # disk costs seconds Warden would otherwise pay again on every
+            # incident after an idle gap -- which is exactly when a user is
+            # watching, because incidents are rare by design.
+            "keep_alive": -1,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},

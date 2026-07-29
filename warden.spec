@@ -29,6 +29,17 @@ vendor = ROOT / "vendor"
 if vendor.is_dir():
     datas.append((str(vendor), "vendor"))
 
+# The model runtime: ollama.exe plus pre-pulled weights, staged by
+# scripts/fetch-model.ps1. Bundling it is what makes a shared build behave the
+# way it behaves here -- without it the header reads "rules engine" on every
+# machine that has never installed Ollama, and the product looks like the
+# scripted troubleshooter it exists to replace. Conditional, so a fresh
+# checkout still builds; warden/reasoner/host.py degrades to a system Ollama
+# and then to the rules engine.
+runtime = ROOT / "runtime"
+if runtime.is_dir():
+    datas.append((str(runtime), "runtime"))
+
 # uvicorn resolves its protocol, lifespan and logging implementations by string
 # at runtime; PyInstaller's static analysis cannot see through that and the
 # server dies on first request without them. pywebview picks its backend the
@@ -59,6 +70,12 @@ exe = EXE(
     console=False,
     disable_windowed_traceback=False,
     upx=False,  # UPX-packed binaries are themselves an antivirus heuristic.
+    # Ask for elevation at launch, once. Most of the registry needs it, and
+    # without this the same build behaves differently depending on how the user
+    # happened to start it -- an admin-gated fix silently becomes a privilege
+    # refusal. Windows cannot elevate a process after it has started, so the
+    # choice is here or nowhere.
+    uac_admin=True,
 )
 
 coll = COLLECT(
