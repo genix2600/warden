@@ -26,11 +26,13 @@ running for something else.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import socket
 import subprocess
 import time
+import urllib.request
 from pathlib import Path
 
 from warden.paths import resource_path
@@ -111,8 +113,8 @@ class ModelHost:
             log.warning("could not start the bundled model runtime: %s", exc)
             return None
 
-        if not self._wait_until_listening(port):
-            log.warning("the bundled model runtime did not start in time")
+        if not self._wait_until_ready(port):
+            log.warning("the bundled model runtime did not become ready in time")
             self.stop()
             return None
 
@@ -120,17 +122,34 @@ class ModelHost:
         log.info("model runtime listening on %s with weights from %s", self.endpoint, models)
         return self.endpoint
 
-    def _wait_until_listening(self, port: int) -> bool:
+    def _wait_until_ready(self, port: int) -> bool:
+        """Wait for the model list, not merely for the socket.
+
+        Ollama binds its port before it has finished indexing the model store,
+        so an accepted connection is not the same as a usable server. Warden
+        asked the socket once and got an empty model list back, concluded there
+        was no model, and fell through to the rules engine -- with the weights
+        sitting right there. On a slower machine, or one reading these files off
+        a freshly extracted zip, that window is wider, not narrower.
+        """
         deadline = time.monotonic() + _START_TIMEOUT_S
         while time.monotonic() < deadline:
             if self._process is not None and self._process.poll() is not None:
                 return False  # It exited; waiting out the timeout helps nobody.
-            try:
-                with socket.create_connection(("127.0.0.1", port), timeout=0.5):
-                    return True
-            except OSError:
-                time.sleep(0.2)
+            if self._models_visible(port):
+                return True
+            time.sleep(0.3)
         return False
+
+    @staticmethod
+    def _models_visible(port: int) -> bool:
+        request = urllib.request.Request(f"http://127.0.0.1:{port}/api/tags")
+        try:
+            with urllib.request.urlopen(request, timeout=1.0) as response:
+                payload = json.load(response)
+        except (OSError, ValueError):
+            return False
+        return bool(payload.get("models"))
 
     def stop(self) -> None:
         """Terminate the child. Called on shutdown; safe to call twice."""

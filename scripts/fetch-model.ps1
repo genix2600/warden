@@ -44,9 +44,22 @@ Write-Note "using $ollama"
 
 # -- Pull the model -----------------------------------------------------------
 
-Write-Step "Pulling $Model"
-& $ollama pull $Model
-if ($LASTEXITCODE -ne 0) { throw "could not pull $Model" }
+# `ollama pull` draws a progress bar on stderr. With ErrorActionPreference set
+# to Stop, PowerShell 5.1 turns each of those lines into a NativeCommandError
+# and kills the script mid-download, so the preference is relaxed across the
+# call and the exit code checked explicitly instead.
+$already = (& $ollama list) -match [regex]::Escape($Model)
+if ($already) {
+    Write-Note "$Model is already pulled"
+} else {
+    Write-Step "Pulling $Model"
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    & $ollama pull $Model
+    $code = $LASTEXITCODE
+    $ErrorActionPreference = $previous
+    if ($code -ne 0) { throw "could not pull $Model (exit $code)" }
+}
 
 $source = Join-Path $env:USERPROFILE '.ollama\models'
 if (-not (Test-Path $source)) { throw "no model store at $source" }
@@ -60,12 +73,33 @@ New-Item -ItemType Directory $runtime | Out-Null
 Write-Step "Staging into runtime\"
 Copy-Item $ollama (Join-Path $runtime 'ollama.exe')
 
-# Ollama ships supporting DLLs and GPU runners beside the executable. Missing
-# them shows up only at inference time, which is far too late to notice.
+# Ollama ships supporting libraries beside the executable, and missing them
+# shows up only at inference time, which is far too late to notice.
+#
+# The vendor GPU runners are excluded: CUDA and ROCm are 2.6 GB between them and
+# neither can be used by the integrated graphics this build targets. On a
+# machine that does have a discrete GPU, Ollama simply runs on the CPU instead
+# -- slower, but correct, and worth it to keep the download shareable.
+#
+# The per-generation CPU libraries are all kept, and they are the reason this
+# travels: Ollama selects ggml-cpu-haswell, -zen4, -alderlake and so on at
+# runtime, so one bundle works on an AMD laptop and a six-year-old Intel one.
+$excluded = @('cuda_v12', 'cuda_v13', 'rocm_v7_1')
 $binDir = Split-Path -Parent $ollama
-foreach ($extra in @('*.dll', 'lib')) {
-    $found = Join-Path $binDir $extra
-    if (Test-Path $found) { Copy-Item $found $runtime -Recurse -Force }
+Get-ChildItem $binDir -Filter '*.dll' -ErrorAction SilentlyContinue |
+    Copy-Item -Destination $runtime -Force
+
+$libSource = Join-Path $binDir 'lib'
+if (Test-Path $libSource) {
+    $libTarget = Join-Path $runtime 'lib'
+    New-Item -ItemType Directory $libTarget -Force | Out-Null
+    Get-ChildItem $libSource | ForEach-Object {
+        $inner = Join-Path $libTarget $_.Name
+        New-Item -ItemType Directory $inner -Force | Out-Null
+        Get-ChildItem $_.FullName -Force |
+            Where-Object { $_.Name -notin $excluded } |
+            Copy-Item -Destination $inner -Recurse -Force
+    }
 }
 
 Copy-Item $source (Join-Path $runtime 'models') -Recurse -Force

@@ -92,13 +92,18 @@ class OllamaClient:
         self,
         endpoint: str = DEFAULT_ENDPOINT,
         model: str = DEFAULT_MODEL,
-        timeout_s: float = 25.0,
+        timeout_s: float = 45.0,
     ) -> None:
         self.endpoint = endpoint.rstrip("/")
         self.model = model
-        # A hard ceiling matters more than a fast model. If reasoning has not
-        # finished by now the incident is better served by the deterministic
-        # answer than by a user watching a spinner.
+        # A hard ceiling still matters more than a fast model -- past this the
+        # incident is better served by the deterministic answer than by a user
+        # watching a spinner. But the ceiling has to clear the measurement with
+        # room to spare: qwen2.5:1.5b answers this machine's wireless prompt in
+        # 15.1-18.7s (see docs/calibration.md), and the build ships to laptops
+        # that may be slower than this one. 25s left barely any headroom and
+        # would have turned a working model into a silent fallback on a machine
+        # nobody here has ever seen.
         self.timeout_s = timeout_s
         self._available_models: list[str] = []
 

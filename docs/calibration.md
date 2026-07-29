@@ -96,3 +96,51 @@ The verification window for `net.wifi.reconnect` is set to 25 s from the 11.5 s
 success case plus margin. Waiting longer would not help: the failures did not
 become successes at 45 s, they stayed failures, and a fix that has not taken hold
 in twice its typical time is better escalated than waited on.
+
+---
+
+## Local model latency, and why the model is small
+
+**Measured 29 July 2026, on the development machine.** i5-1135G7, 4 cores / 8
+threads, Iris Xe integrated graphics, no discrete GPU, 15.8 GB RAM. Inference is
+CPU-only; there is no offload path on this hardware.
+
+The prompt is the real one, built by `build_user_prompt` from a
+`NET.WIFI.DISCONNECTED` symptom with four supporting readings and three candidate
+actions — 2,211 characters.
+
+| Run | `qwen2.5:1.5b-instruct`, model resident |
+|---|---|
+| 1 | 18.7 s |
+| 2 | 15.4 s |
+| 3 | 15.1 s |
+
+The first call after a cold start is different and worth stating separately: it
+exceeded 25 s, because roughly a gigabyte of weights has to be read off disk
+before any token is produced. That cost is paid once, which is why the client
+sends `keep_alive: -1` and the runtime is started before the agent rather than
+lazily on the first incident.
+
+**Why not a larger model.** A 7B model on this machine produces 4–6 tokens per
+second. A decision of this shape is 250–400 tokens, so it would take 60–100 s and
+never complete inside any ceiling worth having. It would not be slow, it would be
+non-functional: every incident would fall back to the rules engine after a 4.7 GB
+download. The interface would say `rules engine` and a reasonable person would
+conclude the product has no model in it at all.
+
+**What the small model gets wrong, and why that is survivable.** Across three
+runs it consistently returned `needs_more_data` and chose `net.wifi.scan` — a
+valid action from the candidate set, and the timid one. With a saved profile
+present, `net.wifi.reconnect` is the better first move.
+
+This is tolerable because of a property the system already had. The scan is
+read-only, verification re-reads the adapter and finds it still disassociated,
+and the incident escalates with `net.wifi.scan` added to the `exclude` set, so
+the next proposal cannot be the same one. A conservative first guess costs one
+extra approval, not a wrong outcome. It is also, demonstrated live, the clearest
+evidence that the loop is an agent rather than a script.
+
+**Threshold set from this.** The client ceiling moved from 25 s to 45 s. 25 s was
+under 1.5x the observed mean, which is not headroom — it is a coin toss on any
+machine slower than this one, and the build is meant to be shared with machines
+nobody here has measured.
