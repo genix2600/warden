@@ -29,12 +29,16 @@ from pathlib import Path
 from typing import TextIO
 
 from warden.contracts import AgentEvent, AgentEventAdapter, Source
+from warden.paths import data_path, resource_path
 from warden.winenv import describe_host
 
 log = logging.getLogger(__name__)
 
-SESSION_DIR = Path("sessions")
-FIXTURE_DIR = Path("fixtures")
+#: Recordings belong to the user and must outlive an upgrade. Fixtures ship with
+#: Warden and are read-only. Before these were split, a frozen build tried to
+#: write its session log into its own extracted bundle.
+SESSION_DIR = data_path("sessions")
+FIXTURE_DIR = resource_path("fixtures")
 
 
 class SessionRecorder:

@@ -12,6 +12,16 @@ def is_windows() -> bool:
     return sys.platform == "win32"
 
 
+def is_frozen() -> bool:
+    """True when running from a PyInstaller bundle rather than a source checkout.
+
+    Warden answers two questions differently depending on this: where its
+    read-only assets live, and where it is allowed to write. Both are settled in
+    ``warden.paths``; this is the single place the question itself is asked.
+    """
+    return getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
+
+
 def is_admin() -> bool:
     """True when the process holds an elevated token.
 

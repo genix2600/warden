@@ -18,9 +18,11 @@ import tomllib
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 
+from warden.paths import data_path
+
 log = logging.getLogger(__name__)
 
-LOCAL_CONFIG = Path("warden.local.toml")
+LOCAL_CONFIG = data_path("warden.local.toml")
 
 
 @dataclass(frozen=True, slots=True)

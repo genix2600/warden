@@ -192,4 +192,7 @@ class TestVerification:
 
     def test_a_missing_reading_is_inconclusive_not_failure(self, store: ObservationStore) -> None:
         passed, detail = PREDICATES["service.running"](store, {"service": "Spooler"})
+        # None is not False: "we could not tell" must reach the user as its own
+        # answer, and must say which reading was missing.
         assert passed is None
+        assert "no service reading is available" in detail

@@ -44,7 +44,6 @@ import contextlib
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from pathlib import Path
 
 from warden.collectors.base import Collector, first, num, timed
 from warden.collectors.psbridge import (
@@ -55,11 +54,12 @@ from warden.collectors.psbridge import (
     json_pipeline,
 )
 from warden.contracts import Mechanism, ObservationKind, ProbeResult
+from warden.paths import resource_path
 from warden.winenv import is_admin
 
 log = logging.getLogger(__name__)
 
-VENDOR_DIR = Path(__file__).resolve().parents[2] / "vendor"
+VENDOR_DIR = resource_path("vendor")
 LHM_DLL = VENDOR_DIR / "LibreHardwareMonitorLib.dll"
 
 _ACPI_ZONES = json_pipeline(

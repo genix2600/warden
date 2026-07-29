@@ -28,13 +28,14 @@ from warden.contracts.state import AgentSnapshot, DomainHealth
 from warden.demo import DemoHarness
 from warden.domains import DOMAINS, summarise
 from warden.orchestrator import Agent, SessionRecorder
+from warden.paths import resource_path
 from warden.playbooks import CANDIDATES, REGISTRY
 from warden.reasoner.llm import DEFAULT_MODEL
-from warden.winenv import describe_host, is_admin
+from warden.winenv import describe_host, is_admin, is_frozen
 
 log = logging.getLogger(__name__)
 
-UI_DIST = "ui/dist"
+UI_DIST = resource_path("ui", "dist")
 
 
 class ScenarioResponse(BaseModel):
@@ -327,19 +328,22 @@ async def _doctor(agent: Agent) -> DoctorReport:
 
 
 def _mount_ui(app: FastAPI) -> None:
-    from pathlib import Path
-
-    dist = Path(UI_DIST)
+    dist = UI_DIST
     if not dist.exists():
+        # In a source checkout this is a step the developer has not run yet. In a
+        # frozen build it is a packaging defect, and telling the user to run npm
+        # would send them after a problem that is not theirs to fix.
+        fix = (
+            "this build is missing its interface; rebuild it with scripts/build-exe.ps1"
+            if is_frozen()
+            else "run `npm install && npm run build` in ui/, or use run.ps1"
+        )
 
         @app.get("/")
         async def missing_ui() -> JSONResponse:
             return JSONResponse(
                 status_code=503,
-                content={
-                    "error": "the interface has not been built",
-                    "fix": "run `npm install && npm run build` in ui/, or use run.ps1",
-                },
+                content={"error": "the interface has not been built", "fix": fix},
             )
 
         return
