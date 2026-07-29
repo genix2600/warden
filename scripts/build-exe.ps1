@@ -91,8 +91,16 @@ Remove-Tree (Join-Path $root 'build')
 Remove-Tree (Join-Path $root 'dist')
 
 Write-Step "Packaging"
+# PyInstaller logs progress to stderr. With ErrorActionPreference set to Stop,
+# PowerShell 5.1 turns each of those lines into a NativeCommandError and kills
+# the build partway through, so the preference is relaxed across the call and
+# the exit code checked explicitly instead.
+$previous = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
 & $venvPython -m PyInstaller warden.spec --clean --noconfirm --log-level WARN
-if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
+$code = $LASTEXITCODE
+$ErrorActionPreference = $previous
+if ($code -ne 0) { throw "PyInstaller failed (exit $code)" }
 
 # -- Prove it produced what it claims -----------------------------------------
 
