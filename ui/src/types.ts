@@ -29,6 +29,11 @@ export type DoctorReport = S["DoctorReport"];
 export type CapabilityReport = S["CapabilityReport"];
 export type Severity = S["Severity"];
 
+export type AuditReport = S["AuditReport"];
+export type CheckResult = S["CheckResult"];
+export type CheckStatus = S["CheckStatus"];
+export type Recommendation = S["Recommendation"];
+
 export type TelemetryEvent = S["TelemetryEvent"];
 export type AgentLogEvent = S["AgentLogEvent"];
 export type AgentStatusEvent = S["AgentStatusEvent"];
@@ -77,6 +82,7 @@ export type StatusTone = "good" | "warning" | "serious" | "critical" | "idle";
 export type PageId =
   | "overview"
   | "health"
+  | "tuneup"
   | "history"
   | "capabilities"
   | "evidence"

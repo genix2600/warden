@@ -1,6 +1,7 @@
 /** Thin fetch helpers. The API is on the same origin the shell loaded from. */
 import type {
   AgentSnapshot,
+  AuditReport,
   CapabilityReport,
   DoctorReport,
   DomainHealth,
@@ -32,6 +33,8 @@ export const api = {
   domains: () => json<DomainHealth[]>("/api/domains"),
   actions: () => json<CapabilityReport>("/api/actions"),
   doctor: () => json<DoctorReport>("/api/doctor"),
+  // POST, and only on demand. There is no polling loop for this anywhere.
+  audit: () => json<AuditReport>("/api/audit", { method: "POST" }),
   approve: (id: string) => json<Incident>(`/api/incidents/${id}/approve`, { method: "POST" }),
   decline: (id: string) => json<Incident>(`/api/incidents/${id}/decline`, { method: "POST" }),
   dropWifi: () => json<{ detail: string }>("/api/demo/wifi-drop", { method: "POST" }),

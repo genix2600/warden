@@ -94,6 +94,35 @@ export function domainTone(state: string): StatusTone {
   )[state as "ok"] ?? "idle";
 }
 
+/** Audit check statuses. `could_not_read` and `not_applicable` are not passes.
+ *
+ * The same rule as `domainTone`: a check whose reading failed is not evidence
+ * that the setting is correct, and neither is a check that does not apply to
+ * this hardware. Neither gets the green that `optimal` gets. */
+export function checkTone(status: string): StatusTone {
+  return (
+    {
+      optimal: "good",
+      suboptimal: "warning",
+      intent_dependent: "idle",
+      not_applicable: "idle",
+      could_not_read: "idle",
+    } as const
+  )[status as "optimal"] ?? "idle";
+}
+
+export function checkLabel(status: string): string {
+  return (
+    {
+      optimal: "Already right",
+      suboptimal: "Worth changing",
+      intent_dependent: "Your call",
+      not_applicable: "Doesn't apply here",
+      could_not_read: "Can't tell",
+    }[status] ?? status
+  );
+}
+
 export function domainLabel(state: string): string {
   return (
     {

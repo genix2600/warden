@@ -23,10 +23,12 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from warden.contracts import ActionSpec, AgentEvent, Incident
+from warden.audit import run_audit
+from warden.contracts import ActionSpec, AgentEvent, AuditReport, Incident
 from warden.contracts.state import AgentSnapshot, DomainHealth
 from warden.demo import DemoHarness
 from warden.domains import DOMAINS, summarise
+from warden.executor.restore import describe as describe_restore
 from warden.orchestrator import Agent, SessionRecorder
 from warden.paths import resource_path
 from warden.playbooks import CANDIDATES, REGISTRY
@@ -145,6 +147,17 @@ def _routes(agent: Agent, harness: DemoHarness) -> APIRouter:
             )
             for domain in DOMAINS
         ]
+
+    @router.post("/audit", response_model=AuditReport)
+    async def run_the_audit() -> AuditReport:
+        """Examine settings that are wrong but have not broken anything.
+
+        A POST, and only ever called when the user opens the page or asks for a
+        re-check. There is deliberately no timer and no background pass: a tool
+        that rescans on a schedule and grows a badge is the scareware pattern
+        this feature was written not to be.
+        """
+        return run_audit(agent.store)
 
     @router.get("/events/recent", response_model=list[AgentEvent])
     async def recent_events(since: int = 0) -> list[Any]:
@@ -287,6 +300,20 @@ async def _doctor(agent: Agent) -> DoctorReport:
                 f"temperature sensors via {active}"
                 if active
                 else "no temperature sensor; using clock-throttle inference, which is enough"
+            ),
+            blocking=False,
+        )
+    )
+
+    restore = await asyncio.to_thread(describe_restore)
+    checks.append(
+        DoctorCheck(
+            name="Way back",
+            ok=restore.available,
+            detail=(
+                f"{restore.detail} Warden takes one before the first disruptive action, "
+                "and hands you to Windows' own restore screen rather than rolling the "
+                "machine back itself."
             ),
             blocking=False,
         )

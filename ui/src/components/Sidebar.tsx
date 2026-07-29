@@ -9,11 +9,16 @@ interface Props {
   openIncidents: number;
 }
 
+// "What it can do" sits third on purpose. That page carries the list of
+// problems Warden has decided it cannot fix -- enforced by an empty candidate
+// tuple, not by good intentions -- and it is the most persuasive screen here.
+// Burying it below History meant nobody reached it.
 const NAV: { id: PageId; label: string; icon: string; hint: string }[] = [
   { id: "overview", label: "Now", icon: "home", hint: "What is happening right now" },
   { id: "health", label: "Health", icon: "heart", hint: "Every part of the machine" },
-  { id: "history", label: "History", icon: "history", hint: "What Warden has done" },
   { id: "capabilities", label: "What it can do", icon: "shield", hint: "The full action list" },
+  { id: "tuneup", label: "Tune-up", icon: "gauge", hint: "Settings that are worth changing" },
+  { id: "history", label: "History", icon: "history", hint: "What Warden has done" },
   { id: "evidence", label: "Readings", icon: "list", hint: "Everything Warden has read" },
   { id: "readiness", label: "Readiness", icon: "check", hint: "Is Warden set up properly" },
 ];

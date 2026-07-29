@@ -80,6 +80,33 @@ def _wait_for_server(port: int, timeout_s: float = _SERVER_START_TIMEOUT_S) -> b
     return False
 
 
+def _webview2_present() -> bool:
+    """Whether the Edge WebView2 Runtime is registered on this machine.
+
+    Read from the registry rather than by probing the filesystem: the runtime
+    installs per-machine or per-user, at paths that have moved between
+    versions, and the registration is the thing WebView2 itself looks for.
+    """
+    import winreg
+
+    keys = (
+        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients"),
+        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\EdgeUpdate\Clients"),
+        (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\EdgeUpdate\Clients"),
+    )
+    # The Evergreen Runtime's fixed client id, stable across versions.
+    client = "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+    for root, path in keys:
+        try:
+            with winreg.OpenKey(root, f"{path}\\{client}") as handle:
+                version, _ = winreg.QueryValueEx(handle, "pv")
+                if version and version != "0.0.0.0":
+                    return True
+        except OSError:
+            continue
+    return False
+
+
 def main(argv: list[str] | None = None) -> int:
     # Before anything that might log, and before uvicorn builds its logging
     # configuration: a windowed build has no streams for either to write to.
@@ -143,6 +170,20 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
         import webview  # imported late so --headless does not require a GUI stack
+
+        # WebView2 is a system component, not something the bundle can carry.
+        # It ships with Windows 11 and reaches most Windows 10 machines through
+        # Edge, but "most" is not "all" -- and without it the window opens
+        # blank, which looks like Warden is broken rather than like a missing
+        # runtime. Say so instead.
+        if not _webview2_present():
+            log.error(
+                "Microsoft Edge WebView2 Runtime is not installed, so the window "
+                "cannot render. Install the Evergreen Runtime from "
+                "https://developer.microsoft.com/microsoft-edge/webview2/ "
+                "or run Warden with --headless and open the address above."
+            )
+            return 3
 
         webview.create_window(
             WINDOW_TITLE,

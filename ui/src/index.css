@@ -21,7 +21,11 @@
   --color-ink-2: #a9b4c2;
   --color-muted: #6b7787;
   --color-grid: #232c3a;
-  --color-hairline: rgba(255, 255, 255, 0.08);
+  /* 0.08 was right on a laptop panel and invisible through a projector, which
+     crushes the four surface steps (#0b0f14 to #1b2331) toward one flat black
+     and takes the panel separation with them. 0.14 keeps the instrument feel at
+     arm's length and survives a bulb. */
+  --color-hairline: rgba(255, 255, 255, 0.14);
 
   /* Categorical slots 1 and 2, dark steps. Delivered clock and processor load
      are two measures on one 0-100 scale, so they share a single axis. */

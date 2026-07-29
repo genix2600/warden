@@ -45,13 +45,21 @@ export function Overview({
         onSeeHealth={onSeeHealth}
       />
 
-      <div className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)_276px] gap-4 px-4 pb-4">
-        <TelemetryPanel
-          telemetry={state.telemetry}
-          series={state.series}
-          collectors={state.snapshot?.collectors ?? []}
-          onInspect={onInspect}
-        />
+      {/* Measured: 280 + 276 of fixed columns, plus gaps and padding, is 620px
+          of chrome before the 188px sidebar. On a 1024px projector that left
+          the incident stage 216px -- narrow enough that reaching the Approve
+          button meant scrolling, which is the worst thing that can happen
+          mid-demonstration. The agent log is the least load-bearing panel here,
+          so it is the one that goes first, then the telemetry rail. */}
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] gap-4 px-4 pb-4 lg:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[280px_minmax(0,1fr)_276px]">
+        <div className="hidden min-h-0 lg:block">
+          <TelemetryPanel
+            telemetry={state.telemetry}
+            series={state.series}
+            collectors={state.snapshot?.collectors ?? []}
+            onInspect={onInspect}
+          />
+        </div>
         <IncidentStage
           incident={focus}
           monitoring={monitoring}
@@ -64,7 +72,9 @@ export function Overview({
           onDecline={onDecline}
           busy={busy}
         />
-        <AgentLog lines={log} />
+        <div className="hidden min-h-0 2xl:block">
+          <AgentLog lines={log} />
+        </div>
       </div>
     </div>
   );
@@ -115,6 +125,32 @@ function Banner({
     icon = "shield";
     headline = "This one needs a person, not a command";
     detail = incident.title;
+  }
+
+  // When a proposal is on screen the banner is repeating it. The card below
+  // says "Warden wants to run one command" and carries the argv, the effect,
+  // the verification test and the buttons; a headline above it saying the same
+  // thing in larger type is the most valuable vertical space on the page spent
+  // on a restatement. The other three states earn their size and keep it.
+  if (waiting) {
+    return (
+      <div className="flex items-center gap-2.5 px-6 pb-2.5 pt-4">
+        <span className="text-warning">
+          <Icon name="shield" size={17} />
+        </span>
+        <p className="min-w-0 flex-1 truncate text-[13px] text-ink-2">
+          <span className="font-medium text-ink">Waiting for you.</span>{" "}
+          {incident?.title ?? ""}
+        </p>
+        <button
+          type="button"
+          onClick={onSeeHealth}
+          className="shrink-0 rounded-lg border border-hairline px-2.5 py-1 text-[11px] text-ink-2 transition-colors hover:bg-raised hover:text-ink"
+        >
+          See every area
+        </button>
+      </div>
+    );
   }
 
   return (

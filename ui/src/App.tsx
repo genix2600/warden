@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { api } from "./lib/api";
 import { isTerminal, useWarden } from "./lib/useWarden";
+import { useZoom } from "./lib/useZoom";
 import type { Observation, PageId } from "./types";
 import { DemoBar } from "./components/DemoBar";
 import { EvidenceDrawer } from "./components/EvidenceDrawer";
@@ -12,9 +13,13 @@ import { Health } from "./pages/Health";
 import { History } from "./pages/History";
 import { Overview } from "./pages/Overview";
 import { Readiness } from "./pages/Readiness";
+import { TuneUp } from "./pages/TuneUp";
 
 export default function App() {
   const { state, incidents, focus, refresh } = useWarden();
+  // Ctrl +/- , for showing this on a projector. Return value unused: the hook
+  // sets the root font size, and every size in the interface is relative to it.
+  useZoom();
   const [page, setPage] = useState<PageId>("overview");
   const [inspecting, setInspecting] = useState<Observation | null>(null);
   const [busy, setBusy] = useState(false);
@@ -71,6 +76,7 @@ export default function App() {
           {page === "health" && (
             <Health onInspect={setInspecting} tick={state.snapshot?.tick ?? 0} />
           )}
+          {page === "tuneup" && <TuneUp />}
           {page === "history" && <History incidents={incidents} />}
           {page === "capabilities" && <Capabilities />}
           {page === "evidence" && (

@@ -36,6 +36,7 @@ from warden.contracts import (
     RiskTier,
     utcnow,
 )
+from warden.executor.restore import ensure_checkpoint
 from warden.playbooks import REGISTRY, ActionRejected, PlaybookRegistry, render_argv
 from warden.winenv import is_admin
 
@@ -53,6 +54,7 @@ _MAX_RUNTIME_S = 120.0
 class Executor:
     def __init__(self, registry: PlaybookRegistry = REGISTRY) -> None:
         self._registry = registry
+        self._checkpointed = False
 
     def execute(
         self,
@@ -76,6 +78,17 @@ class Executor:
             record.finished_at = utcnow()
             log.warning("refused to execute %s: %s", proposal.action_id, blocked)
             return record
+
+        # A safety net for the whole machine, taken once per session before the
+        # first disruptive action rather than before every action -- Windows
+        # rate-limits checkpoints to one a day, and a snapshot from earlier in
+        # the session still predates everything Warden has done. Best effort: a
+        # machine with System Protection switched off is one Warden still works
+        # on, and Readiness says plainly that the net is missing.
+        if proposal.risk is RiskTier.INTRUSIVE and not self._checkpointed:
+            self._checkpointed = True
+            state = ensure_checkpoint()
+            log.info("restore point before first intrusive action: %s", state.detail)
 
         return self._run(proposal, record, on_output)
 
