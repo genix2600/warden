@@ -24,15 +24,16 @@ that produced it, how long that took, and how much the collector trusts it. Clic
 any reading and you get a command you could run yourself and get the same answer.
 
 **It cannot invent a command.** The reasoning model never writes shell. It picks
-an id from a closed registry of seven reviewed actions and supplies parameters,
+an id from a closed registry of fifteen reviewed actions and supplies parameters,
 which are validated against a schema *and* against reality before a human is ever
 asked to approve them. Warden will not connect you to a network it has never seen
 this machine use, or restart a device that is not in the device tree.
 
 **It knows what it cannot fix.** The mapping from symptom to available actions is
-data, in `warden/playbooks/__init__.py`. Five symptoms map to an empty tuple —
+data, in `warden/playbooks/__init__.py`. Seven symptoms map to an empty tuple —
 overheating, a radio switched off in hardware, no adapter present, an upstream
-internet fault. For those there is no command in the candidate set to choose, so
+internet fault, a worn-out battery, a failing drive. For those there is no
+command in the candidate set to choose, so
 no amount of model confidence can produce one. It routes to servicing instead,
 and distinguishes "you need to flip a switch" from "this needs a technician".
 
@@ -92,6 +93,30 @@ slow" is the thing users actually experience and degrees are only a proxy for it
 
 ## Running it
 
+### The packaged app
+
+Build the folder, copy it anywhere, double-click `Warden.exe`. No Python, no
+Node, no virtual environment on the machine that runs it.
+
+```powershell
+.\scripts\build-exe.ps1     # produces dist\Warden\ (~45 MB)
+```
+
+The build is unsigned, so on a machine that has not seen it before **SmartScreen
+will warn on first run** — *More info* → *Run anyway*. Buying a code-signing
+certificate is the only fix and is not one we can make in the source.
+
+There is no console, so a packaged run writes its log to
+`%LOCALAPPDATA%\Warden\logs\warden.log`. Recorded sessions and local threshold
+overrides live beside it, under `%LOCALAPPDATA%\Warden\` — never inside the
+application folder, which is read-only and replaced on upgrade.
+
+First launch takes about 20 seconds before the window has data: PowerShell
+loading its networking and storage modules, which Warden pays once at startup
+rather than on the first poll.
+
+### From source
+
 ```powershell
 git clone <this repo>
 cd warden
@@ -100,28 +125,30 @@ cd warden
 
 `run.ps1` creates the virtual environment, installs dependencies, builds the
 interface and opens the window. First launch takes a couple of minutes; after
-that, startup is about 15 seconds — most of it PowerShell loading its networking
-modules, which Warden pays once at startup rather than on the first poll.
+that it skips straight to launching.
 
 **Optional, both degrade honestly if skipped:**
 
 ```powershell
 ollama pull qwen2.5:7b-instruct   # written explanations instead of templated ones
-.\scripts\fetch-sensors.ps1       # real temperatures (also needs an elevated run)
 ```
 
-**Check it is ready** — the `Readiness` button in the interface, or:
+Dropping `LibreHardwareMonitorLib.dll` into `vendor/` adds real temperature
+sensors (and needs an elevated run). Without it the thermal collector falls back
+through OpenHardwareMonitor's WMI namespace, ACPI thermal zones, and finally
+inference from delivered clock speed — each tier reporting lower confidence than
+the last, visibly, on the reading itself.
 
-```powershell
-.\scripts\doctor.ps1
-```
+**Check it is ready** — the **Readiness** page in the app, which reports every
+check and names the capability lost by each optional one that is missing. The
+same report is at `GET /api/doctor`.
 
 **Development:**
 
 ```powershell
 python -m warden --headless --port 8099   # backend only, browsable API at /docs
 cd ui && npm run dev                       # interface with hot reload
-python -m pytest                           # 60 tests, ~2s, no hardware needed
+python -m pytest                           # 172 tests, ~7s, no hardware needed
 cd ui && npm run gen:types                 # regenerate TS types from the contracts
 ```
 
@@ -190,10 +217,15 @@ warden/
   orchestrator/  The loop, the event bus, session recording and replay.
   demo/          Real fault injection. Fenced off; the agent cannot reach it.
   api/           FastAPI + WebSocket, bound to loopback only.
+  domains.py     Translates symptom codes into the 13 areas a person recognises.
+  paths.py       What ships with Warden versus what belongs to the user.
 ui/              React interface; src/generated/ is produced, not written.
-tests/           60 tests, none of which need Windows-specific hardware.
-docs/            Architecture and the calibration measurements.
+tests/           172 tests, none of which need Windows-specific hardware.
+docs/            The calibration measurements behind every threshold.
 ```
+
+[`ARCHITECTURE.md`](ARCHITECTURE.md) has the pipeline diagram, the four gates in
+front of execution, and the list of things Warden refuses to do.
 
 Start with `warden/contracts/` — the type definitions carry the design, and the
 rule that a `NEEDS_SERVICE` verdict is structurally incapable of holding an
