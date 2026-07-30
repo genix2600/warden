@@ -30,6 +30,8 @@ export type CapabilityReport = S["CapabilityReport"];
 export type Severity = S["Severity"];
 
 export type AuditReport = S["AuditReport"];
+export type Settings = S["Settings"];
+export type CheckStarted = S["CheckStarted"];
 export type CheckResult = S["CheckResult"];
 export type CheckStatus = S["CheckStatus"];
 export type Recommendation = S["Recommendation"];
@@ -86,4 +88,5 @@ export type PageId =
   | "history"
   | "capabilities"
   | "evidence"
+  | "settings"
   | "readiness";

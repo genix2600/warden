@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { api } from "./lib/api";
 import { isTerminal, useWarden } from "./lib/useWarden";
+import { useTheme } from "./lib/useTheme";
 import { useZoom } from "./lib/useZoom";
 import type { Observation, PageId } from "./types";
 import { DemoBar } from "./components/DemoBar";
@@ -14,6 +15,7 @@ import { Health } from "./pages/Health";
 import { History } from "./pages/History";
 import { Overview } from "./pages/Overview";
 import { Readiness } from "./pages/Readiness";
+import { Settings } from "./pages/Settings";
 import { TuneUp } from "./pages/TuneUp";
 
 export default function App() {
@@ -21,6 +23,7 @@ export default function App() {
   // Ctrl +/- , for showing this on a projector. Return value unused: the hook
   // sets the root font size, and every size in the interface is relative to it.
   useZoom();
+  const [theme, setTheme] = useTheme();
   const [page, setPage] = useState<PageId>("overview");
   const [inspecting, setInspecting] = useState<Observation | null>(null);
   const [busy, setBusy] = useState(false);
@@ -84,13 +87,23 @@ export default function App() {
             />
           )}
           {!warming && page === "health" && (
-            <Health onInspect={setInspecting} tick={state.snapshot?.tick ?? 0} />
+            <Health
+              onInspect={setInspecting}
+              tick={state.snapshot?.tick ?? 0}
+              // A check that found something opens an incident, which lives on
+              // Now -- so go there rather than leaving the user on a page that
+              // has just stopped being where the action is.
+              onChecked={() => setPage("overview")}
+            />
           )}
           {!warming && page === "tuneup" && <TuneUp />}
           {!warming && page === "history" && <History incidents={incidents} />}
           {!warming && page === "capabilities" && <Capabilities />}
           {!warming && page === "evidence" && (
             <Evidence telemetry={state.telemetry} onInspect={setInspecting} />
+          )}
+          {!warming && page === "settings" && (
+            <Settings theme={theme} onThemeChange={setTheme} />
           )}
           {!warming && page === "readiness" && <Readiness snapshot={state.snapshot} />}
         </main>

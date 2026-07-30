@@ -60,7 +60,7 @@ class ScriptedCollector(Collector):
 def build_agent(script: list[dict]) -> Agent:
     collector = ScriptedCollector(script)
     host = CollectorHost(collectors=[collector], bridge=_NullBridge())  # type: ignore[arg-type]
-    return Agent(
+    agent = Agent(
         collectors=host,
         # Zero clear window: these tests drive ticks as fast as they can, and
         # the production 30s hysteresis would stall every self-heal assertion.
@@ -71,6 +71,11 @@ def build_agent(script: list[dict]) -> Agent:
         reasoner=Reasoner(use_llm=False),
         tick_s=0.01,
     )
+    # These tests pin the loop itself -- detect, diagnose, propose, verify,
+    # escalate -- so the agent has to be allowed to start on its own. The
+    # shipped default is off; tests/test_on_demand.py covers that.
+    agent.autodiagnose = True
+    return agent
 
 
 class _NullBridge:

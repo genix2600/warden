@@ -7,9 +7,21 @@
   on your machine has to look like an instrument instead -- calm, dense,
   monospaced where it matters, and quiet until it genuinely has something.
 
-  Dark-only, and chosen rather than inverted: the steps below are the dark-mode
-  values from a validated palette, checked against this surface with the
-  palette validator (2-series categorical: all five checks pass on #141922).
+  Dark is the default and the one the interface was designed in: the steps
+  below are the dark-mode values from a validated palette, checked against this
+  surface with the palette validator (2-series categorical: all five checks
+  pass on #141922).
+
+  Light is a second design rather than an inversion. Inverting a dark palette
+  gives you muddy mid-greys and an accent that vibrates on white; the light
+  steps further down were picked against paper, and the two series colours are
+  darkened there so they stay legible on a pale ground. The status palette is
+  the one thing that does not change -- red must be the same red in both, or a
+  screenshot of a fault stops meaning what it meant.
+
+  `[data-theme]` on <html> wins over the default because it is a more specific
+  selector than :root, which is what lets the toggle override without a media
+  query fighting it.
 */
 @theme {
   --color-plane: #0b0f14;
@@ -43,6 +55,36 @@
 
   --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "Cascadia Code", "Consolas", ui-monospace, monospace;
+}
+
+/* The light design. Not #ffffff: a very slightly cool paper keeps the same
+   blue-biased neutral family as the dark set, so the accent belongs on both
+   grounds rather than looking borrowed. */
+[data-theme="light"] {
+  --color-plane: #f5f7fa;
+  --color-surface: #ffffff;
+  --color-raised: #eef1f6;
+  --color-sunken: #e9edf3;
+
+  --color-ink: #101720;
+  --color-ink-2: #46536a;
+  --color-muted: #6b7787;
+  --color-grid: #dde3ec;
+  --color-hairline: rgba(16, 23, 32, 0.14);
+
+  /* Darkened so they hold contrast on paper. The dark steps wash out badly
+     here -- #3987e5 on white is legible for a large fill and not for a 1px
+     sparkline, which is most of what these are used for. */
+  --color-series-1: #1f66c4;
+  --color-series-2: #b8420f;
+
+  /* Status stays fixed across themes, but `good` and `warning` are the two
+     that fail on a pale ground, so both get their darker step. Same hues,
+     same meanings. */
+  --color-good: #0a7d0a;
+  --color-warning: #9a6a00;
+  --color-serious: #c4551f;
+  --color-critical: #c02626;
 }
 
 html,

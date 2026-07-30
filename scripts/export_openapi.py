@@ -36,19 +36,20 @@ def mark_response_fields_required(document: dict[str, Any]) -> int:
     before the reasoner has answered. Those stay nullable here because they are
     declared ``| None`` in Python, which is a different thing from unset.
 
-    Safe because this API has no request bodies: nothing in the document is
-    parsed *from* a client. The assertion keeps that true.
+    Only responses. A schema that a client *sends* must keep its optional
+    fields optional -- a field with a default exists precisely so the caller may
+    leave it out, and tightening it would force every caller to supply
+    everything. Request schemas are therefore found and skipped rather than
+    assumed absent, which is what the earlier version did until the settings
+    endpoint became the first thing Warden accepts a body for.
     """
     schemas = document.get("components", {}).get("schemas", {})
-    assert not any(
-        "requestBody" in operation
-        for path in document.get("paths", {}).values()
-        for operation in path.values()
-        if isinstance(operation, dict)
-    ), "a request body was added; this transformation is no longer safe"
+    incoming = _request_schemas(document)
 
     changed = 0
-    for schema in schemas.values():
+    for name, schema in schemas.items():
+        if name in incoming:
+            continue
         properties = schema.get("properties")
         if not isinstance(properties, dict) or schema.get("type") != "object":
             continue
@@ -56,6 +57,48 @@ def mark_response_fields_required(document: dict[str, Any]) -> int:
             schema["required"] = sorted(properties)
             changed += 1
     return changed
+
+
+def _request_schemas(document: dict[str, Any]) -> set[str]:
+    """Every schema reachable from a request body, transitively.
+
+    Transitively because a body model may nest others, and tightening a nested
+    one is just as wrong as tightening the top level.
+    """
+    schemas = document.get("components", {}).get("schemas", {})
+    roots: set[str] = set()
+    for path in document.get("paths", {}).values():
+        for operation in path.values():
+            if not isinstance(operation, dict):
+                continue
+            body = operation.get("requestBody")
+            if isinstance(body, dict):
+                roots |= _referenced(body)
+
+    seen: set[str] = set()
+    queue = list(roots)
+    while queue:
+        name = queue.pop()
+        if name in seen or name not in schemas:
+            continue
+        seen.add(name)
+        queue.extend(_referenced(schemas[name]))
+    return seen
+
+
+def _referenced(node: Any) -> set[str]:
+    """Schema names mentioned by any $ref anywhere under this node."""
+    found: set[str] = set()
+    if isinstance(node, dict):
+        ref = node.get("$ref")
+        if isinstance(ref, str) and ref.startswith("#/components/schemas/"):
+            found.add(ref.rsplit("/", 1)[-1])
+        for value in node.values():
+            found |= _referenced(value)
+    elif isinstance(node, list):
+        for value in node:
+            found |= _referenced(value)
+    return found
 
 
 def main() -> int:

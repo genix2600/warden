@@ -51,6 +51,7 @@ from warden.contracts import (
 )
 from warden.contracts.state import AgentSnapshot, CollectorHealth, ReasonerHealth
 from warden.detectors import DetectorBank
+from warden.domains import DOMAIN_OF_SYMPTOM
 from warden.executor import Executor, Verifier
 from warden.orchestrator.bus import EventBus
 from warden.playbooks import CANDIDATES
@@ -101,6 +102,19 @@ class Agent:
 
         self.tick_s = tick_s
         self.tick = 0
+        #: Whether a raised symptom should open an incident by itself.
+        #:
+        #: Off by default, and that is a product decision rather than a
+        #: performance one. Warden watches everything it can, but not everyone
+        #: cares about everything it finds: a machine with no printer does not
+        #: want to be told about the spooler, and a network deliberately left
+        #: Public should not interrupt anyone. Detection stays automatic and
+        #: everything found is visible on the Health page; the reasoning and
+        #: the proposal wait until someone asks for them.
+        #:
+        #: Turning this on restores the older behaviour for anyone who wants
+        #: the agent to act on its own.
+        self.autodiagnose = False
         self.monitoring = False
         self.warming = False
         self.started_at: datetime | None = None
@@ -228,7 +242,8 @@ class Agent:
             self._on_symptom_cleared(code)
         for symptom in raised:
             self.bus.publish(SymptomRaisedEvent(symptom=symptom))
-            self._open_incident(symptom)
+            if self.autodiagnose:
+                self._open_incident(symptom)
 
         if self.tick % 5 == 0:
             self._publish_status()
@@ -247,6 +262,30 @@ class Agent:
         self._incident_by_code.pop(code, None)
         self._log(f"{code} cleared on its own; closing the incident without acting.")
         self.bus.publish(IncidentClosedEvent(incident=incident))
+
+    def check(self, domain_id: str | None = None) -> list[str]:
+        """Diagnose what has been found, for one area or all of them.
+
+        This is the on-demand half of the split. Detection runs continuously
+        and everything it finds is already on the Health page; nothing reasons
+        about a finding or proposes a fix until someone asks here.
+
+        Returns the symptom codes it started work on, which is empty when the
+        area is fine -- a distinction the interface needs, because "checked,
+        nothing wrong" and "did not check" must not look the same.
+
+        Asking again bypasses the reopen cooldown. The cooldown exists to stop
+        Warden interrupting; a person clicking Check is not being interrupted.
+        """
+        wanted = [
+            symptom
+            for symptom in self.detectors.active
+            if domain_id is None or DOMAIN_OF_SYMPTOM.get(symptom.code) == domain_id
+        ]
+        for symptom in wanted:
+            self._reopen_after.pop(symptom.code, None)
+            self._open_incident(symptom)
+        return [s.code for s in wanted]
 
     def _open_incident(self, symptom: Symptom) -> None:
         existing = self._incident_by_code.get(symptom.code)

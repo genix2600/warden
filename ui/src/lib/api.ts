@@ -2,6 +2,8 @@
 import type {
   AgentSnapshot,
   AuditReport,
+  CheckStarted,
+  Settings,
   CapabilityReport,
   DoctorReport,
   DomainHealth,
@@ -35,6 +37,12 @@ export const api = {
   doctor: () => json<DoctorReport>("/api/doctor"),
   // POST, and only on demand. There is no polling loop for this anywhere.
   audit: () => json<AuditReport>("/api/audit", { method: "POST" }),
+  // Diagnosis is on request. Omit the domain to check everything.
+  check: (domain?: string) =>
+    json<CheckStarted>(`/api/check${domain ? `?domain=${domain}` : ""}`, { method: "POST" }),
+  settings: () => json<Settings>("/api/settings"),
+  saveSettings: (next: Settings) =>
+    json<Settings>("/api/settings", { method: "PUT", body: JSON.stringify(next) }),
   downloadModel: () =>
     json<{ started: boolean; detail: string }>("/api/model/download", { method: "POST" }),
   relaunchElevated: () =>

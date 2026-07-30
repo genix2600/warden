@@ -24,6 +24,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from warden import settings
 from warden.audit import run_audit
 from warden.contracts import ActionSpec, AgentEvent, AgentLogEvent, AuditReport, Incident
 from warden.contracts.state import AgentSnapshot, DomainHealth
@@ -35,6 +36,7 @@ from warden.paths import resource_path
 from warden.playbooks import CANDIDATES, REGISTRY
 from warden.reasoner.host import ModelHost, has_weights
 from warden.reasoner.llm import DEFAULT_MODEL
+from warden.settings import Settings
 from warden.winenv import describe_host, is_admin, is_frozen, relaunch_elevated
 
 log = logging.getLogger(__name__)
@@ -62,6 +64,18 @@ class DoctorReport(BaseModel):
 
 class RelaunchResponse(BaseModel):
     started: bool
+    detail: str
+
+
+class CheckStarted(BaseModel):
+    """What a requested check picked up.
+
+    ``started`` is empty when the area is fine. The interface needs that
+    distinction: "checked, nothing wrong" and "did not check" must not look the
+    same, which is the whole reason this returns a list rather than a boolean.
+    """
+
+    started: list[str] = Field(description="Symptom codes now being diagnosed.")
     detail: str
 
 
@@ -141,6 +155,7 @@ def create_app(
             recorder = SessionRecorder()
             agent.bus.add_sink(recorder)
             agent.session_path = str(recorder.path)
+        agent.autodiagnose = settings.load().autodiagnose
         await agent.start()
         try:
             yield
@@ -205,6 +220,42 @@ def _routes(agent: Agent, harness: DemoHarness, model_host: ModelHost | None) ->
             )
             for domain in DOMAINS
         ]
+
+    @router.get("/settings", response_model=Settings)
+    async def get_settings() -> Settings:
+        return settings.load()
+
+    @router.put("/settings", response_model=Settings)
+    async def put_settings(incoming: Settings) -> Settings:
+        """Save preferences, and apply the ones the running agent cares about."""
+        settings.save(incoming)
+        agent.autodiagnose = incoming.autodiagnose
+        return incoming
+
+    @router.post("/check", response_model=CheckStarted)
+    async def check(domain: str | None = None) -> CheckStarted:
+        """Diagnose what has been found, for one area or all of them.
+
+        Detection runs continuously and everything it finds is already on the
+        Health page. This is where a finding turns into reasoning and a
+        proposal, and it only happens because somebody asked -- so a machine
+        with no printer is never interrupted about the spooler, and a network
+        left Public on purpose stays a note rather than a demand.
+        """
+        codes = agent.check(domain)
+        if not codes:
+            return CheckStarted(
+                started=[],
+                detail=(
+                    "Nothing to look into here — Warden has not found anything wrong in this area."
+                    if domain
+                    else "Nothing to look into. Warden has not found anything wrong."
+                ),
+            )
+        return CheckStarted(
+            started=codes,
+            detail=f"Looking into {len(codes)} finding{'' if len(codes) == 1 else 's'}.",
+        )
 
     @router.post("/audit", response_model=AuditReport)
     async def run_the_audit() -> AuditReport:

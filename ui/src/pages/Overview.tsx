@@ -37,6 +37,11 @@ export function Overview({
 }: Props) {
   const monitoring = state.snapshot?.monitoring ?? false;
   const waiting = focus?.state === "awaiting_approval";
+  // Findings Warden has made but not been asked to look into. Without this the
+  // banner would say "everything looks fine" while the Health page listed two
+  // problems -- which is exactly the kind of comfortable lie this product is
+  // an argument against.
+  const unexamined = Object.keys(state.symptoms).length;
 
   return (
     <div className="flex h-full flex-col">
@@ -44,6 +49,7 @@ export function Overview({
         monitoring={monitoring}
         waiting={waiting}
         incident={focus}
+        unexamined={unexamined}
         onSeeHealth={onSeeHealth}
       />
 
@@ -95,11 +101,13 @@ function Banner({
   monitoring,
   waiting,
   incident,
+  unexamined,
   onSeeHealth,
 }: {
   monitoring: boolean;
   waiting: boolean;
   incident: Incident | null;
+  unexamined: number;
   onSeeHealth: () => void;
 }) {
   const open = incident && !["resolved", "unresolved", "needs_service", "declined"].includes(
@@ -128,6 +136,18 @@ function Banner({
     icon = "shield";
     headline = "This one needs a person, not a command";
     detail = incident.title;
+  } else if (unexamined > 0) {
+    // Noticed, not yet reasoned about. Saying "fine" here would be untrue, and
+    // raising an alarm would be the nagging this design exists to avoid.
+    tone = "text-warning";
+    icon = "heart";
+    headline = `${unexamined} thing${unexamined === 1 ? "" : "s"} worth a look`;
+    detail =
+      "Warden found " +
+      (unexamined === 1 ? "something" : "these") +
+      " but has not looked into " +
+      (unexamined === 1 ? "it" : "them") +
+      " yet. Open Health and choose what matters to you.";
   }
 
   // When a proposal is on screen the banner is repeating it. The card below

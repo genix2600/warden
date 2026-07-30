@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { briefValue, domainLabel, domainTone, toneClass } from "../lib/format";
 import type { DomainHealth, Observation } from "../types";
@@ -17,12 +17,34 @@ import { PageHeader } from "../components/PageHeader";
 export function Health({
   onInspect,
   tick,
+  onChecked,
 }: {
   onInspect: (observation: Observation) => void;
   tick: number;
+  /** Called after a check starts something, so the shell can show the incident. */
+  onChecked: (started: number) => void;
 }) {
   const [domains, setDomains] = useState<DomainHealth[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [checking, setChecking] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  const check = useCallback(
+    async (domainId?: string) => {
+      setChecking(domainId ?? "__all__");
+      setNote(null);
+      try {
+        const result = await api.check(domainId);
+        setNote(result.detail);
+        if (result.started.length > 0) onChecked(result.started.length);
+      } catch (problem) {
+        setNote(problem instanceof Error ? problem.message : String(problem));
+      } finally {
+        setChecking(null);
+      }
+    },
+    [onChecked],
+  );
 
   useEffect(() => {
     let alive = true;
@@ -60,13 +82,33 @@ export function Health({
               ? `All ${domains.length} areas checked. ${fine} working normally, nothing needs you.`
               : `${wrong.length} of ${domains.length} areas need attention.`
         }
+        actions={
+          <button
+            type="button"
+            onClick={() => void check()}
+            disabled={checking !== null}
+            className="rounded-lg bg-series-1 px-3.5 py-1.5 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {checking === "__all__" ? "Looking…" : "Check everything"}
+          </button>
+        }
       />
+
+      {/* Warden watches on its own but does not interrupt on its own, so the
+          findings above sit here until someone asks about them. */}
+      {note && <p className="mb-3 text-[12px] text-ink-2">{note}</p>}
 
       {error && <p className="text-[13px] text-critical">{error}</p>}
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         {sorted.map((domain) => (
-          <DomainCard key={domain.id} domain={domain} onInspect={onInspect} />
+          <DomainCard
+            key={domain.id}
+            domain={domain}
+            onInspect={onInspect}
+            onCheck={() => void check(domain.id)}
+            checking={checking === domain.id}
+          />
         ))}
       </div>
 
@@ -85,9 +127,13 @@ export function Health({
 function DomainCard({
   domain,
   onInspect,
+  onCheck,
+  checking,
 }: {
   domain: DomainHealth;
   onInspect: (observation: Observation) => void;
+  onCheck: () => void;
+  checking: boolean;
 }) {
   const tone = domainTone(domain.state);
   const attention = domain.state === "problem" || domain.state === "attention";
@@ -126,6 +172,14 @@ function DomainCard({
             {domain.active_symptoms.length === 1 ? "" : "s"}
           </span>
         )}
+        <button
+          type="button"
+          onClick={onCheck}
+          disabled={checking}
+          className="ml-auto rounded-lg border border-hairline px-2.5 py-1 text-[11px] text-ink-2 transition-colors hover:bg-raised hover:text-ink disabled:opacity-50"
+        >
+          {checking ? "Looking…" : "Look into this"}
+        </button>
       </div>
 
       {highlights.length > 0 && (

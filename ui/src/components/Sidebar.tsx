@@ -20,6 +20,7 @@ const NAV: { id: PageId; label: string; icon: string; hint: string }[] = [
   { id: "tuneup", label: "Tune-up", icon: "gauge", hint: "Settings that are worth changing" },
   { id: "history", label: "History", icon: "history", hint: "What Warden has done" },
   { id: "evidence", label: "Readings", icon: "list", hint: "Everything Warden has read" },
+  { id: "settings", label: "Settings", icon: "sliders", hint: "Appearance and behaviour" },
   { id: "readiness", label: "Readiness", icon: "check", hint: "Is Warden set up properly" },
 ];
 
