@@ -34,7 +34,7 @@ export interface Tier {
 export const TIERS: Tier[] = [
   {
     name: "Free",
-    price: "£0",
+    price: "₹0",
     cadence: "forever, per machine",
     summary: "Everything Warden does today, on a machine you own.",
     cta: "Download",
@@ -53,7 +53,7 @@ export const TIERS: Tier[] = [
   },
   {
     name: "Pro",
-    price: "£3",
+    price: "₹99",
     cadence: "per month",
     summary: "For the person everyone in the family calls.",
     cta: "Not built yet",
@@ -70,7 +70,7 @@ export const TIERS: Tier[] = [
   },
   {
     name: "Team",
-    price: "£6",
+    price: "₹199",
     cadence: "per machine, per month",
     summary: "For an IT desk that would rather not walk to every desk.",
     cta: "Not built yet",
@@ -92,18 +92,18 @@ export const TIERS: Tier[] = [
 export const ECONOMICS = [
   {
     label: "Cost to serve a free user",
-    value: "£0",
+    value: "₹0",
     note: "The model runs on their processor. No inference bill, no storage, no account. A free user costs bandwidth for one download.",
   },
   {
     label: "What a callout costs today",
-    value: "£50 to £90",
-    note: "Typical UK on-site rate for a consumer PC problem, most of which is travel and diagnosis rather than the fix.",
+    value: "₹1,500 to ₹3,000",
+    note: "Typical Indian on-site rate for a business machine, most of which is travel and diagnosis rather than the fix.",
   },
   {
     label: "Break-even for a Team seat",
-    value: "one avoided callout",
-    note: "At £6 per machine per month, a 30-machine desk pays £2,160 a year. Avoiding two callouts a month covers it.",
+    value: "three avoided callouts a month",
+    note: "At ₹199 per machine per month, a 30-machine desk pays ₹71,640 a year. Three callouts a month at ₹2,000 is ₹72,000.",
   },
   {
     label: "Gross margin at scale",

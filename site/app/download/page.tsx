@@ -66,7 +66,7 @@ export default function DownloadPage() {
 
       <Callout tone="warning" title="Windows will warn you, and here is why">
         <p>
-          The installer is not code-signed, because a certificate costs a few hundred pounds
+          The installer is not code-signed, because a certificate costs a few hundred dollars
           and this is a student project. So SmartScreen will show{" "}
           <em>&ldquo;Windows protected your PC&rdquo;</em> the first time you run it. Choose{" "}
           <strong className="text-ink">More info</strong>, then{" "}

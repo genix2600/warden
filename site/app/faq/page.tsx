@@ -76,7 +76,7 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
     q: "Why does Windows warn me when I run it?",
     a: (
       <>
-        The installer is not code-signed, because a certificate costs a few hundred pounds a
+        The installer is not code-signed, because a certificate costs a few hundred dollars a
         year and this is a student project. SmartScreen warns about any unsigned installer.
         Choose <strong className="text-ink">More info</strong> then{" "}
         <strong className="text-ink">Run anyway</strong>. If that makes you uneasy, good

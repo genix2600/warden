@@ -149,8 +149,8 @@ export default function PricingPage() {
           ))}
         </div>
         <p className="mt-3 max-w-2xl text-[12px] leading-relaxed text-muted">
-          The callout figure is a typical UK on-site rate and worth checking against
-          your own market. Everything else follows from Warden running the model on
+          The callout figure is a typical Indian on-site rate and worth checking
+          against your own market. Everything else follows from Warden running the model on
           the user&rsquo;s own processor, which means a free user costs one download
           and nothing after that.
         </p>
