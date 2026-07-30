@@ -2,7 +2,7 @@
 
 **An agentic Windows diagnostician that reads your machine, shows you the evidence, and runs nothing without your say-so.**
 
-`v0.9.0` · Windows 10 and 11, x64 · 211 tests · runs entirely on your own machine
+`v1.0.0` · Windows 10 and 11, x64 · 242 tests · runs entirely on your own machine
 
 [Website](https://warden.vercel.app) · [Download](https://github.com/genix2600/warden/releases/latest) · [Architecture](ARCHITECTURE.md) · [Measurements](docs/calibration.md)
 
@@ -50,7 +50,7 @@ command you can run yourself to get the same answer.
 ### It cannot invent a command
 
 The reasoning model never writes shell. It chooses an id from a closed registry of
-15 reviewed actions and supplies parameters, which are checked against a schema
+17 reviewed actions and supplies parameters, which are checked against a schema
 and against reality before anyone is asked to approve them. Warden will not
 connect you to a network it has never seen this machine use, or restart a device
 that is not in the device tree.
@@ -61,6 +61,26 @@ Findings appear on the Health page and wait there. Nothing is diagnosed until yo
 press **Look into this** on an area or **Check everything**. A machine with no
 printer is never told about the print spooler. Automatic diagnosis is available as
 a setting for anyone who prefers it.
+
+### It reviews settings that are wrong without being broken
+
+Most of Warden reacts to faults. The **Tune-up** page is the standing review: a
+processor capped at 60% by a power plan nobody chose, graphics drivers four years
+old, automatic cleanup switched off. None of it is failing, which is exactly why
+nobody has found it.
+
+Two rules decide what appears there, both enforced in the contracts rather than
+by good intentions. A finding must name a quantity Warden can read before and
+after, so nothing on the page has a benefit you can only feel. And a fix must be
+reversible, which is why the obvious one is missing: Warden measures the
+gigabyte of temporary files it could delete, prints the figure, and does not
+offer to delete it, because a deletion cannot be put back. It offers Storage
+Sense instead.
+
+Where there is no right answer it refuses to pick one. A capped processor is
+faster plugged in or cooler on your lap, so Warden shows both costs, recommends
+neither, and says why. After a change it re-reads the same number and reports the
+difference, including when the difference is *"No measurable change yet"*.
 
 ### "Fixed" is a measurement
 
@@ -100,11 +120,11 @@ interface always says which one answered.
 |---|---|
 | Areas watched | 13, named the way a person would name them |
 | Problems detected | 25 |
-| Actions available | 15 (2 read-only, 7 reversible, 6 disruptive) |
+| Actions available | 17 (2 read-only, 9 reversible, 6 disruptive) |
 | Problems refused | 7, enforced by an empty candidate list |
-| Verification predicates | 12 |
+| Verification predicates | 14 |
 | Collectors | 14, sampling from every 2 seconds to every 120 |
-| Settings audited | 3 read-only checks (see Limitations) |
+| Settings audited | 9 checks, 2 of which Warden can change and undo |
 
 Internet and Wi-Fi · Sharing and Discovery · Printing · Sound · Camera and
 Microphone · Bluetooth · Windows Update · Search · Battery · Storage · Speed and
@@ -160,7 +180,7 @@ checks whether it is already done.
 
 ```powershell
 .\scripts\fetch-model.ps1 -RuntimeOnly   # stages ollama.exe, no weights
-.\scripts\build-installer.ps1            # dist\Warden-Setup-0.9.0.exe
+.\scripts\build-installer.ps1            # dist\Warden-Setup-1.0.0.exe
 ```
 
 Drop `-RuntimeOnly`, then pass `-Offline` to `build-installer.ps1`, to build the
@@ -180,7 +200,7 @@ connection. That one is roughly 967 MB.
 | System access | CIM and `Get-Net*` cmdlets over a persistent PowerShell host, `psutil`, `netsh`, ACPI/WMI, optional LibreHardwareMonitor via pythonnet | Locale-independent where it matters. |
 | Packaging | PyInstaller (onedir) and Inno Setup | A folder rather than a self-extracting binary, which starts faster and trips fewer antivirus heuristics. |
 | Website | Next.js, Tailwind v4, on Vercel | Nine static pages, no backend. |
-| Quality | pytest, mypy, ruff | 211 tests needing no Windows hardware. mypy clean across 70 modules, strict on `contracts/`. |
+| Quality | pytest, mypy, ruff | 242 tests needing no Windows hardware. mypy clean across 74 modules, strict on `contracts/`. |
 
 ### Why the model is small
 
@@ -299,7 +319,7 @@ ui/              React interface. src/generated/ is produced, not written.
 site/            The website. Vercel Root Directory must be set to site.
 installer/       Inno Setup definition.
 scripts/         Build, icon generation, model staging, schema export.
-tests/           211 tests, none of which need Windows-specific hardware.
+tests/           242 tests, none of which need Windows-specific hardware.
 docs/            The calibration measurements behind every threshold.
 ```
 
@@ -322,8 +342,8 @@ and the full list of what Warden refuses to attempt.
 ```powershell
 python -m warden --headless --port 8099   # backend only, API docs at /docs
 cd ui; npm run dev                        # interface with hot reload
-python -m pytest                          # 211 tests, about 3 seconds
-python -m mypy warden                     # 70 modules, strict on contracts/
+python -m pytest                          # 242 tests, about 3 seconds
+python -m mypy warden                     # 74 modules, strict on contracts/
 python -m ruff check .; python -m ruff format .
 cd ui; npm run gen:types                  # regenerate TS types from contracts
 ```
@@ -353,13 +373,14 @@ at the repository root and tries to build the Python project.
 Windows event log, the registry and Windows services throughout, so there is no
 meaningful cross-platform version of it.
 
-**Fifteen actions.** The registry is small on purpose. Every entry is reviewed,
-grounded against observed reality, and verifiable. Breadth would cost the
-guarantees that make the rest defensible.
+**Seventeen actions.** The registry is small on purpose. Every entry is
+reviewed, grounded against observed reality, and verifiable. Breadth would cost
+the guarantees that make the rest defensible.
 
-**The settings audit is partial.** Three read-only checks ship of an intended
-larger set, and applying fixes from that page is designed but not built. That is
-why the version is 0.9.0 rather than 1.0.
+**Seven of the nine audit checks report without acting.** A check earns a fix
+button only if the change can be undone and the quantity re-read afterwards.
+Driver age, startup load and reclaimable space fail that test for good reasons
+rather than for want of time, and the page says so where the button would be.
 
 **No temperature sensor on many machines.** Without LibreHardwareMonitor in
 `vendor/`, the thermal collector falls to inferring from delivered clock speed and
@@ -369,6 +390,18 @@ says so on the reading itself, rather than printing a plausible number.
 single laptop. Behaviour on other silicon is reasoned about, not tested.
 
 **Unsigned.** SmartScreen will warn until there is a certificate.
+
+---
+
+## Team
+
+Built for ShriTeq 2026.
+
+- **Aaryaman Vaidya** (technical lead)
+- **Abhav Jain**
+- **Annem Saad**
+- **Avyukt Chhabra**
+- **Viti Mehra**
 
 ---
 

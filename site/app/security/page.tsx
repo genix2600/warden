@@ -56,7 +56,7 @@ export default function SecurityPage() {
       >
         <Prose>
           <p>
-            Warden can run fifteen commands. Not fifteen kinds of command: fifteen specific
+            Warden can run seventeen commands. Not seventeen kinds of command: seventeen specific
             ones, written by hand, sitting in the source where you can read them before you
             install anything. The AI selects from that list; it cannot compose, extend or edit
             it.

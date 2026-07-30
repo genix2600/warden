@@ -11,7 +11,7 @@
  */
 
 export const REPO = "https://github.com/genix2600/warden";
-export const VERSION = "0.9.0";
+export const VERSION = "1.0.0";
 
 /** GitHub Releases, because the installer is far past the 100 MB file limit
  *  that GitHub and Vercel both enforce. `/latest/` means the site never needs
@@ -35,7 +35,7 @@ export const MODEL_SIZE = "1 GB";
 
 export const STATS = [
   { value: 13, label: "areas watched", suffix: "" },
-  { value: 15, label: "actions it can take", suffix: "" },
+  { value: 17, label: "actions it can take", suffix: "" },
   { value: 7, label: "problems it refuses to fix", suffix: "" },
   { value: 0, label: "data sent anywhere", suffix: " bytes" },
 ] as const;
@@ -102,6 +102,61 @@ export const REFUSALS = [
   },
 ];
 
+/** The nine standing checks in `warden/audit/`, in the order they are declared.
+ *
+ *  `acts` is not a marketing distinction, it is the contract. A check may only
+ *  carry a fix button if the change can be undone and the quantity can be read
+ *  again afterwards. Two of the nine clear that bar. The other seven are still
+ *  reported, because a reading you can act on yourself beats silence, and
+ *  because the alternative is a button that cannot honour its own promise. */
+export const AUDIT_CHECKS = [
+  {
+    title: "Processor speed limit",
+    reads: "The ceiling your power plan puts on the processor, as a percentage.",
+    acts: "Raises it to 100 and can put your number back.",
+  },
+  {
+    title: "Automatic cleanup",
+    reads: "Whether Storage Sense is switched on.",
+    acts: "Turns it on, and off again if you change your mind.",
+  },
+  {
+    title: "Driver age",
+    reads: "How old your graphics, network, sound and Bluetooth drivers are.",
+    acts: null,
+  },
+  {
+    title: "Space that can be handed back",
+    reads: "Megabytes sitting in temporary folders and the update cache.",
+    acts: null,
+  },
+  {
+    title: "Power plan",
+    reads: "Which plan is active, and what each of the alternatives would cost you.",
+    acts: null,
+  },
+  {
+    title: "Programs that start with Windows",
+    reads: "How many there are, and which ones.",
+    acts: null,
+  },
+  {
+    title: "Wi-Fi adapter power saving",
+    reads: "Whether Windows is allowed to switch the radio off to save power.",
+    acts: null,
+  },
+  {
+    title: "Scheduled drive optimisation",
+    reads: "Whether an SSD is on a defragmentation schedule meant for a spinning disk.",
+    acts: null,
+  },
+  {
+    title: "Update waiting to finish",
+    reads: "How long a restart has been outstanding.",
+    acts: null,
+  },
+];
+
 export const ACTION_TIERS = [
   {
     tier: "Looks, changes nothing",
@@ -111,8 +166,10 @@ export const ACTION_TIERS = [
   },
   {
     tier: "Changes something, easily undone",
-    count: 7,
-    blurb: "Reconnects, clears a cache, corrects a setting. Nothing here is hard to reverse.",
+    count: 9,
+    blurb:
+      "Reconnects, clears a cache, corrects a setting, turns on automatic cleanup. "
+      + "Every one of these can be put back.",
     examples: ["ipconfig /flushdns", "ipconfig /renew", "w32tm /resync"],
   },
   {

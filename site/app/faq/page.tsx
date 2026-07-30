@@ -46,7 +46,7 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
     q: "Can it break my computer?",
     a: (
       <>
-        It runs fifteen specific commands, all of them reviewed and visible in the source, and
+        It runs seventeen specific commands, all reviewed and visible in the source, and
         none of them without you pressing a button first. Before anything disruptive it asks
         Windows for a System Restore point. If something still went wrong, it opens
         Windows&rsquo; own restore screen rather than trying to undo your system itself.

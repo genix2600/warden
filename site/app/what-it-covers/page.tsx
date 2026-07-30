@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { PageShell, Prose, Section } from "@/components/ui";
-import { ACTION_TIERS, DOMAINS, REFUSALS } from "@/lib/product";
+import { ACTION_TIERS, AUDIT_CHECKS, DOMAINS, REFUSALS } from "@/lib/product";
 
 export const metadata: Metadata = {
   title: "What it covers",
   description:
-    "Thirteen areas of Windows, fifteen actions across three risk tiers, and the seven "
+    "Thirteen areas of Windows, seventeen actions across three risk tiers, and the seven "
     + "problems Warden refuses to attempt.",
 };
 
@@ -34,7 +34,7 @@ export default function WhatItCoversPage() {
       </Section>
 
       <Section
-        title="Fifteen actions, grouped by how much they disturb"
+        title="Seventeen actions, grouped by how much they disturb"
         blurb="This is the complete list. There is no other way for Warden to change your machine, and every one of them shows you the exact command before you approve it."
       >
         <div className="space-y-3">
@@ -58,6 +58,43 @@ export default function WhatItCoversPage() {
             </div>
           ))}
         </div>
+      </Section>
+
+      <Section
+        title="Nine standing checks, of which two come with a button"
+        blurb="Separate from the thirteen areas above. Those react to faults. These are settings that were wrong before anything went wrong, and a check is only allowed a fix button if the change can be undone and re-measured."
+      >
+        <div className="space-y-2">
+          {AUDIT_CHECKS.map((check) => (
+            <div
+              key={check.title}
+              className="rounded-lg border border-hairline bg-surface px-4 py-3"
+            >
+              <div className="flex flex-wrap items-baseline gap-2">
+                <h3 className="text-[13px] font-semibold text-ink">{check.title}</h3>
+                {check.acts === null && (
+                  <span className="rounded border border-hairline px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted">
+                    Reports only
+                  </span>
+                )}
+              </div>
+              <p className="mt-0.5 text-[12px] leading-snug text-muted">{check.reads}</p>
+              {check.acts !== null && (
+                <p className="mt-1 text-[12px] leading-snug text-good">{check.acts}</p>
+              )}
+            </div>
+          ))}
+        </div>
+        <Prose>
+          <p className="mt-4">
+            The clearest example of the rule doing its job is the one that is missing.
+            Warden measures the temporary files it could delete and prints the figure,
+            often a gigabyte or more. It does not offer to delete them, because a deletion
+            cannot be put back, and a fix it cannot reverse is a fix it is not allowed to
+            propose. It suggests switching on Storage Sense instead, which Windows will do
+            on a schedule and which can be switched off again.
+          </p>
+        </Prose>
       </Section>
 
       <Section

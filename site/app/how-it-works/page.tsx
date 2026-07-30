@@ -13,7 +13,7 @@ const STAGES = [
   {
     n: "01",
     title: "It reads the machine",
-    body: "Thirteen collectors sample continuously, each on its own schedule: wireless every two seconds, drive health every minute. Every reading carries the exact command that produced it, how long that took, and how much the collector trusts it. Nothing is inferred at this stage and nothing is judged.",
+    body: "Fourteen collectors sample continuously, each on its own schedule: wireless every two seconds, drive health every minute. Every reading carries the exact command that produced it, how long that took, and how much the collector trusts it. Nothing is inferred at this stage and nothing is judged.",
   },
   {
     n: "02",
