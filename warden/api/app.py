@@ -26,6 +26,8 @@ from pydantic import BaseModel, Field
 
 from warden import settings
 from warden.audit import run_audit
+from warden.audit.apply import apply as apply_recommendation_action
+from warden.audit.apply import describe_change
 from warden.contracts import ActionSpec, AgentEvent, AgentLogEvent, AuditReport, Incident
 from warden.contracts.state import AgentSnapshot, DomainHealth
 from warden.demo import DemoHarness
@@ -65,6 +67,22 @@ class DoctorReport(BaseModel):
 class RelaunchResponse(BaseModel):
     started: bool
     detail: str
+
+
+class AuditApplied(BaseModel):
+    """The result of applying or reverting one recommendation.
+
+    ``change`` is willing to say "No measurable change yet", and the interface
+    shows that as prominently as an improvement. Several of these settings take
+    days to show an effect, so an immediate zero is expected rather than a
+    failure, and claiming a win at the moment of the click would be the exact
+    unfalsifiable promise this whole subsystem argues against.
+    """
+
+    ok: bool
+    detail: str
+    change: str = ""
+    reverted: bool = False
 
 
 class CheckStarted(BaseModel):
@@ -256,6 +274,48 @@ def _routes(agent: Agent, harness: DemoHarness, model_host: ModelHost | None) ->
             started=codes,
             detail=f"Looking into {len(codes)} finding{'' if len(codes) == 1 else 's'}.",
         )
+
+    @router.post("/audit/apply", response_model=AuditApplied)
+    async def apply_recommendation(check_id: str, revert: bool = False) -> AuditApplied:
+        """Apply a Tune-up recommendation, or put it back.
+
+        Goes through the same executor and the same four gates as every fault
+        fix. The recommendation is rebuilt from a fresh audit rather than
+        remembered, so the prior value written into the revert record is read
+        from the machine as it is now, not from a stale copy.
+        """
+        report = run_audit(agent.store)
+        match = next((r for r in report.recommendations if r.result.check_id == check_id), None)
+        if match is None:
+            raise HTTPException(404, "no recommendation is available for that check")
+        if match.proposal is None:
+            raise HTTPException(
+                409, "that finding is yours to decide on; Warden does not recommend an action"
+            )
+
+        outcome = await asyncio.to_thread(
+            lambda: apply_recommendation_action(match, agent.executor, agent.store, revert=revert)
+        )
+
+        # Re-read so the delta compares against the machine after the command,
+        # not against the readings that were already in the store.
+        await asyncio.to_thread(agent.collectors.run_ids, ["sys.audit"])
+        refreshed = run_audit(agent.store)
+        after_match = next(
+            (r for r in refreshed.recommendations if r.result.check_id == check_id), None
+        )
+        after = after_match.current if after_match else None
+
+        change = describe_change(
+            outcome.before,
+            after,
+            match.metric.unit,
+            match.metric.direction.value == "lower_is_better",
+        )
+        agent.bus.publish(
+            AgentLogEvent(text=f"Tune-up: {match.result.title}. {outcome.detail} {change}")
+        )
+        return AuditApplied(ok=outcome.ok, detail=outcome.detail, change=change, reverted=revert)
 
     @router.post("/audit", response_model=AuditReport)
     async def run_the_audit() -> AuditReport:

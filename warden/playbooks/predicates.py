@@ -18,7 +18,7 @@ from collections.abc import Callable
 from pydantic import JsonValue
 
 from warden.collectors.services import status_name
-from warden.store import ObservationStore
+from warden.store import ObservationStore, as_dict, as_float
 
 #: (passed, human-readable detail). ``passed`` of None means inconclusive.
 Predicate = Callable[[ObservationStore, dict[str, JsonValue]], tuple[bool | None, str]]
@@ -192,6 +192,33 @@ def report_only(store: ObservationStore, args: dict[str, JsonValue]) -> tuple[bo
     return True, "information gathered; no system state was changed"
 
 
+def storage_sense_on(
+    store: ObservationStore, args: dict[str, JsonValue]
+) -> tuple[bool | None, str]:
+    """Windows now clears temporary files by itself."""
+    observation = store.latest("audit.storage.reclaimable")
+    if observation is None:
+        return None, "no storage reading is available to check"
+    if bool(as_dict(observation.value).get("storage_sense_on")):
+        return True, "Storage Sense is on; Windows will clear temporary files on a schedule"
+    return False, "Storage Sense still reads as off"
+
+
+def processor_uncapped(
+    store: ObservationStore, args: dict[str, JsonValue]
+) -> tuple[bool | None, str]:
+    """The processor may use its full speed on mains power again."""
+    observation = store.latest("audit.power.profile")
+    if observation is None:
+        return None, "no power profile reading is available to check"
+    ceiling = as_float(as_dict(observation.value).get("ac_max_pct"))
+    if ceiling is None:
+        return None, "Windows did not report a processor ceiling"
+    if ceiling >= 100:
+        return True, "the processor is allowed 100% of its speed on mains power"
+    return False, f"the ceiling is still {ceiling:.0f}%"
+
+
 PREDICATES: dict[str, Predicate] = {
     "wifi.associated": wifi_associated,
     "net.internet_reachable": internet_reachable,
@@ -205,4 +232,6 @@ PREDICATES: dict[str, Predicate] = {
     "net.hosts_clear": hosts_entry_cleared,
     "time.synchronised": time_synchronised,
     "report.only": report_only,
+    "tuneup.storage_sense_on": storage_sense_on,
+    "tuneup.processor_uncapped": processor_uncapped,
 }

@@ -31,6 +31,7 @@ from warden.playbooks.predicates import PREDICATES, Predicate
 from warden.playbooks.privacy import PRIVACY_PLAYBOOKS
 from warden.playbooks.services import SERVICE_CANDIDATES, SERVICE_PLAYBOOKS
 from warden.playbooks.timesync import TIME_PLAYBOOKS
+from warden.playbooks.tuneup import TUNEUP_PLAYBOOKS
 
 __all__ = [
     "CANDIDATES",
@@ -53,6 +54,7 @@ REGISTRY = PlaybookRegistry(
         *SERVICE_PLAYBOOKS,
         *PRIVACY_PLAYBOOKS,
         *NETCONFIG_PLAYBOOKS,
+        *TUNEUP_PLAYBOOKS,
         *TIME_PLAYBOOKS,
     ]
 )

@@ -46,7 +46,7 @@ from warden.store import ObservationStore
 
 log = logging.getLogger(__name__)
 
-__all__ = ["CHECKS", "Check", "CheckResult", "CheckStatus", "run_audit"]
+__all__ = ["BY_CHECK", "CHECKS", "Check", "CheckResult", "CheckStatus", "run_audit"]
 
 #: Every check Warden performs. Ordered as the Tune-up page reads them, so the
 #: registry doubles as the documentation of what the audit covers.
@@ -92,6 +92,9 @@ def _check_coverage() -> None:
 
 _check_coverage()
 
+#: Lookup by id, for the recommendation builder and the apply endpoint.
+BY_CHECK: dict[str, Check] = {check.id: check for check in CHECKS}
+
 
 def run_audit(store: ObservationStore) -> AuditReport:
     """Run every check once against the current readings.
@@ -108,5 +111,15 @@ def run_audit(store: ObservationStore) -> AuditReport:
         except Exception as exc:  # a check must never break the pass
             log.warning("check %s failed: %s", check.id, exc)
             report.results.append(check.unreadable(f"This check could not run: {exc}"))
+
+    # Recommendations are built here rather than by the caller, so that the
+    # rules about what may carry a proposal live in one place.
+    from warden.audit.recommend import recommend
+
+    for result in report.results:
+        suggestion = recommend(result, store)
+        if suggestion is not None:
+            report.recommendations.append(suggestion)
+
     report.finished_at = utcnow()
     return report
