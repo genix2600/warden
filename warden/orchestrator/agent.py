@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import time
 from datetime import datetime
 
 from warden.collectors import CollectorHost
@@ -63,6 +64,21 @@ log = logging.getLogger(__name__)
 #: because the half-minute before a fault is when the event log gets interesting.
 _CONTEXT_COLLECTORS = ("sys.eventlog", "sys.devices", "sys.processes")
 
+#: How long to leave a symptom alone after an incident for it has closed.
+#:
+#: The detector hysteresis stops a flapping measurement raising twice, but it
+#: cannot help once an incident has genuinely finished: the old guard here only
+#: suppressed a duplicate while the previous incident was *open*, so a symptom
+#: that closed and came back opened a fresh incident and re-ran the model.
+#:
+#: The two numbers differ because the situations do. A fix that worked and then
+#: stopped working is worth knowing about reasonably soon. A verdict the user
+#: cannot act on -- a worn battery, a failing disk, throttling under load -- or
+#: one they explicitly declined will produce the identical answer next time, so
+#: asking again in thirty seconds is nagging rather than diligence.
+_REOPEN_AFTER_S = 300.0
+_REOPEN_AFTER_UNACTIONABLE_S = 1800.0
+
 
 class Agent:
     def __init__(
@@ -99,6 +115,8 @@ class Agent:
         # of bug nobody should have to debug at a demonstration.
         self._execution_lock = asyncio.Lock()
         self._collector_errors: dict[str, str] = {}
+        #: Symptom code -> monotonic time before which it must not reopen.
+        self._reopen_after: dict[str, float] = {}
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -233,6 +251,13 @@ class Agent:
     def _open_incident(self, symptom: Symptom) -> None:
         existing = self._incident_by_code.get(symptom.code)
         if existing and not self.incidents[existing].state.is_terminal:
+            return
+
+        until = self._reopen_after.get(symptom.code)
+        if until is not None and time.monotonic() < until:
+            # Recently dealt with. Still visible on the Health page -- this
+            # suppresses the interruption, not the finding.
+            log.debug("%s is in its reopen cooldown; not opening again", symptom.code)
             return
         incident = Incident(title=symptom.title, symptoms=[symptom])
         self.incidents[incident.id] = incident
@@ -441,7 +466,21 @@ class Agent:
 
     def _set_state(self, incident: Incident, state: IncidentState) -> None:
         incident.state = state
+        if state.is_terminal:
+            self._start_cooldown(incident, state)
         self.bus.publish(IncidentStateEvent(incident_id=incident.id, state=state))
+
+    def _start_cooldown(self, incident: Incident, state: IncidentState) -> None:
+        """Hold this symptom's code down for a while now the incident is over."""
+        unactionable = state in (
+            IncidentState.NEEDS_SERVICE,
+            IncidentState.DECLINED,
+            IncidentState.UNRESOLVED,
+        )
+        window = _REOPEN_AFTER_UNACTIONABLE_S if unactionable else _REOPEN_AFTER_S
+        until = time.monotonic() + window
+        for symptom in incident.symptoms:
+            self._reopen_after[symptom.code] = until
 
     def _log(self, text: str, detail: str | None = None, level: str = "info") -> None:
         self.bus.publish(AgentLogEvent(text=text, detail=detail, level=level))  # type: ignore[arg-type]

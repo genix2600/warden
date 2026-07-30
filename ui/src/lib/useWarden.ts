@@ -138,10 +138,42 @@ function reduce(state: WardenState, action: Action): WardenState {
           return { ...next, log: [line, ...next.log].slice(0, LOG_LIMIT) };
         }
 
-        case "agent.status":
-          return next.snapshot
-            ? { ...next, snapshot: { ...next.snapshot, tick: event.tick, monitoring: event.monitoring } }
-            : next;
+        // Fold everything the event carries, not a subset.
+        //
+        // This previously copied `tick` and `monitoring` and silently dropped
+        // the rest, which meant `warming` never cleared: the snapshot fetched
+        // on connect had it true, nothing ever updated it, and the loading
+        // screen stayed up permanently while a perfectly healthy agent ticked
+        // away behind it. The reasoner fields had the same problem and it
+        // matters more now the model runtime starts in the background -- the
+        // header would say "rules engine" for the whole session after the
+        // model had arrived.
+        //
+        // Adding a field to AgentStatusEvent and forgetting it here is silent,
+        // so the safe shape is to spread rather than to enumerate.
+        case "agent.status": {
+          const snapshot = next.snapshot;
+          if (!snapshot) return next;
+          return {
+            ...next,
+            snapshot: {
+              ...snapshot,
+              tick: event.tick,
+              monitoring: event.monitoring,
+              warming: event.warming,
+              // Null until the first snapshot carries one; there is nothing to
+              // patch in that case, and inventing a shape here would only hide
+              // the fact that the backend has not reported yet.
+              reasoner: snapshot.reasoner
+                ? {
+                    ...snapshot.reasoner,
+                    available: event.reasoner_available,
+                    model: event.reasoner_model,
+                  }
+                : snapshot.reasoner,
+            },
+          };
+        }
 
         case "symptom.raised":
           return { ...next, symptoms: { ...next.symptoms, [event.symptom.code]: event.symptom } };

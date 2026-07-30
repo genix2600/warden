@@ -208,7 +208,9 @@ class TestDetectorBank:
     def test_a_symptom_is_raised_once_and_cleared_once(
         self, connected_store: ObservationStore
     ) -> None:
-        bank = DetectorBank()
+        # Zero window: this test is about the raise/clear contract, not the
+        # hysteresis, which has its own test below.
+        bank = DetectorBank(clear_after_s=0.0)
         raised, cleared = bank.evaluate(connected_store)
         assert raised == [] and cleared == []
 
@@ -240,3 +242,92 @@ class TestDetectorBank:
             )
         raised, cleared = bank.evaluate(connected_store)
         assert cleared == ["NET.WIFI.DISCONNECTED"]
+
+    def test_a_symptom_that_flaps_is_not_re_raised(
+        self, disconnected_store: ObservationStore
+    ) -> None:
+        """Recorded from a real machine, and the reason the hysteresis exists.
+
+        A processor holding 85-95% load sat either side of the throttle
+        threshold, so the symptom went raised, cleared, raised every few
+        seconds. Each raise opened a fresh incident and ran the model again on
+        a fault that had never actually gone away -- the same throttling
+        diagnosed over and over, none of it actionable.
+        """
+        bank = DetectorBank(clear_after_s=30.0)
+        store = disconnected_store
+
+        raised, _ = bank.evaluate(store, now=0.0)
+        assert [s.code for s in raised] == ["NET.WIFI.DISCONNECTED"]
+
+        # Briefly fine, then bad again well inside the window.
+        _reconnect(store)
+        raised, cleared = bank.evaluate(store, now=5.0)
+        assert raised == [] and cleared == []
+
+        _drop(store)
+        raised, cleared = bank.evaluate(store, now=10.0)
+        assert raised == [], "it never left, so there is nothing new to report"
+        assert cleared == []
+        assert [s.code for s in bank.active] == ["NET.WIFI.DISCONNECTED"]
+
+    def test_a_symptom_that_really_goes_away_still_clears(
+        self, disconnected_store: ObservationStore
+    ) -> None:
+        """The hysteresis delays clearing; it must not prevent it."""
+        bank = DetectorBank(clear_after_s=30.0)
+        store = disconnected_store
+        bank.evaluate(store, now=0.0)
+
+        # The window starts when the symptom first goes missing, so from here.
+        _reconnect(store)
+        _, cleared = bank.evaluate(store, now=10.0)
+        assert cleared == [], "too soon -- it might come straight back"
+
+        _, cleared = bank.evaluate(store, now=39.0)
+        assert cleared == [], "29s missing, still inside the window"
+
+        _, cleared = bank.evaluate(store, now=41.0)
+        assert cleared == ["NET.WIFI.DISCONNECTED"]
+        assert bank.active == []
+
+
+def _reconnect(store: ObservationStore) -> None:
+    """Two good samples, because the detectors debounce in both directions."""
+    for _ in range(2):
+        store.ingest(
+            [
+                make_observation(
+                    "net.wifi.link",
+                    {
+                        "state": "connected",
+                        "ssid": "HomeNet",
+                        "profile": "HomeNet",
+                        "radio": "on",
+                        "signal_pct": 80,
+                        "interface": "Wi-Fi",
+                    },
+                ),
+                make_observation("net.connectivity.internet", True),
+            ]
+        )
+
+
+def _drop(store: ObservationStore) -> None:
+    for _ in range(2):
+        store.ingest(
+            [
+                make_observation(
+                    "net.wifi.link",
+                    {
+                        "state": "disconnected",
+                        "ssid": None,
+                        "profile": None,
+                        "radio": "on",
+                        "signal_pct": None,
+                        "interface": "Wi-Fi",
+                    },
+                ),
+                make_observation("net.connectivity.internet", False),
+            ]
+        )

@@ -62,7 +62,10 @@ def build_agent(script: list[dict]) -> Agent:
     host = CollectorHost(collectors=[collector], bridge=_NullBridge())  # type: ignore[arg-type]
     return Agent(
         collectors=host,
-        detectors=DetectorBank(),
+        # Zero clear window: these tests drive ticks as fast as they can, and
+        # the production 30s hysteresis would stall every self-heal assertion.
+        # tests/test_detectors.py covers the hysteresis itself.
+        detectors=DetectorBank(clear_after_s=0.0),
         # The local model is off: these tests pin the deterministic behaviour
         # that must hold whether or not a model is installed.
         reasoner=Reasoner(use_llm=False),
@@ -193,3 +196,53 @@ async def test_escalation_offers_the_next_action_after_a_failure() -> None:
     assert incident.diagnosis.proposal is not None
     assert incident.diagnosis.proposal.action_id == "net.wifi.scan"
     assert incident.state is IncidentState.AWAITING_APPROVAL
+
+
+@pytest.mark.asyncio
+async def test_a_closed_incident_does_not_reopen_immediately() -> None:
+    """The other half of the flapping fix, and the half that costs real time.
+
+    Detector hysteresis stops a wobbling measurement raising twice, but once an
+    incident has genuinely closed the old guard let the very next raise open a
+    fresh one and run the model again. On a machine whose processor sat either
+    side of the throttle threshold that meant the same unactionable verdict
+    diagnosed over and over.
+    """
+    agent = build_agent([CONNECTED, CONNECTED, DROPPED, DROPPED])
+    await tick_until(
+        agent,
+        lambda: any(i.state is IncidentState.AWAITING_APPROVAL for i in agent.incidents.values()),
+    )
+    incident = next(iter(agent.incidents.values()))
+    code = incident.symptoms[0].code
+
+    agent._set_state(incident, IncidentState.DECLINED)
+    assert incident.state.is_terminal
+    opened = len(agent.incidents)
+
+    # The symptom comes straight back, as a flapping one does.
+    agent._open_incident(incident.symptoms[0])
+    assert len(agent.incidents) == opened, "declined a minute ago; do not ask again"
+
+    # Once the cooldown expires it is a fresh problem worth reporting.
+    agent._reopen_after[code] = 0.0
+    agent._open_incident(incident.symptoms[0])
+    assert len(agent.incidents) == opened + 1
+
+
+@pytest.mark.asyncio
+async def test_an_unactionable_verdict_gets_a_longer_cooldown() -> None:
+    """A worn battery will still be worn in five minutes. Asking again is noise."""
+    import time as _time
+
+    agent = build_agent([CONNECTED, CONNECTED, DROPPED, DROPPED])
+    await tick_until(
+        agent,
+        lambda: any(i.state is IncidentState.AWAITING_APPROVAL for i in agent.incidents.values()),
+    )
+    incident = next(iter(agent.incidents.values()))
+    code = incident.symptoms[0].code
+
+    agent._set_state(incident, IncidentState.NEEDS_SERVICE)
+    remaining = agent._reopen_after[code] - _time.monotonic()
+    assert remaining > 300.0, "an unfixable finding should be quieter than a fixable one"
