@@ -309,3 +309,71 @@ class TestEmptyActionListMeansTwoDifferentThings:
         )
         assert '"needs_service"' in text
         assert "no reviewed action covers this" not in text
+
+
+class TestCitationsArrivingAsProse:
+    """`supporting` asks for observation ids and a model answers with a sentence.
+
+    Measured: `supporting` came back as the bare string "No system errors are
+    reported in the logs." An earlier validator passed any non-list through
+    untouched, so it failed the list type check and cost the entire diagnosis --
+    on the packaged build, with a real key, answering a real question.
+    """
+
+    def test_a_sentence_where_a_list_belongs_is_dropped(self) -> None:
+        d = decision(
+            hypotheses=[
+                {
+                    "cause": "c",
+                    "domain": "software",
+                    "likelihood": 0.5,
+                    "reasoning": "r",
+                    "supporting": "No system errors are reported in the logs.",
+                }
+            ]
+        )
+        assert d.hypotheses[0].supporting == []
+
+    def test_both_citation_fields_are_covered(self) -> None:
+        d = decision(
+            hypotheses=[
+                {
+                    "cause": "c",
+                    "domain": "software",
+                    "likelihood": 0.5,
+                    "reasoning": "r",
+                    "supporting": "prose",
+                    "contradicting": "more prose",
+                }
+            ]
+        )
+        assert d.hypotheses[0].supporting == []
+        assert d.hypotheses[0].contradicting == []
+
+    def test_non_string_items_inside_a_list_are_dropped(self) -> None:
+        d = decision(
+            hypotheses=[
+                {
+                    "cause": "c",
+                    "domain": "software",
+                    "likelihood": 0.5,
+                    "reasoning": "r",
+                    "supporting": ["abc123", 42, None, "def456"],
+                }
+            ]
+        )
+        assert d.hypotheses[0].supporting == ["abc123", "def456"]
+
+    def test_a_proper_list_still_works(self) -> None:
+        d = decision(
+            hypotheses=[
+                {
+                    "cause": "c",
+                    "domain": "software",
+                    "likelihood": 0.5,
+                    "reasoning": "r",
+                    "supporting": ["abc123"],
+                }
+            ]
+        )
+        assert d.hypotheses[0].supporting == ["abc123"]

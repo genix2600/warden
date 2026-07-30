@@ -213,7 +213,23 @@ class LlmHypothesis(BaseModel):
     @field_validator("supporting", "contradicting", mode="before")
     @classmethod
     def _trim_citations(cls, value: object) -> object:
-        return value[:4] if isinstance(value, list) else value
+        """Keep at most four observation ids, and nothing that is not one.
+
+        These fields ask for identifiers and a cloud model answers with prose:
+        measured, ``supporting`` came back as the bare string *"No system errors
+        are reported in the logs."* An earlier version of this validator passed
+        any non-list through untouched, so that failed the list type check and
+        cost the whole diagnosis.
+
+        A sentence is dropped rather than wrapped. The guardrail resolves every
+        citation against the store and discards the ones that do not exist, so a
+        wrapped sentence would be thrown away one layer later regardless -- and
+        keeping it here would put unresolvable text in front of a user under a
+        heading that says "evidence".
+        """
+        if isinstance(value, str) or not isinstance(value, list):
+            return []
+        return [item for item in value if isinstance(item, str)][:4]
 
 
 class LlmDecision(BaseModel):
