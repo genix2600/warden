@@ -56,7 +56,9 @@ a = Analysis(
     hiddenimports=hiddenimports,
     # Pulled in transitively by pythonnet and matplotlib-adjacent packages, and
     # worth about 40 MB of bundle each. Nothing in Warden imports them.
-    excludes=["tkinter", "matplotlib", "numpy", "PIL", "pytest"],
+    # Dev-only, and PyInstaller finds them in the same site-packages. Small,
+    # but a type checker and a test runner have no business on a user's disk.
+    excludes=["tkinter", "matplotlib", "numpy", "PIL", "pytest", "_pytest", "mypy", "mypyc", "ruff"],
     noarchive=False,
 )
 
