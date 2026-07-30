@@ -74,6 +74,18 @@ export function TuneUp() {
     void run();
   }, [run]);
 
+  // The one exception to "not on a timer", and it ends by itself. The
+  // configuration collector samples every 120 seconds with two probes allowed
+  // 30, so a page opened straight after launch has nothing to read. Retrying
+  // until the first reading lands is the difference between a page that fills
+  // in and a page that tells the user nine collectors are broken.
+  const pending = report?.first_reading_pending ?? false;
+  useEffect(() => {
+    if (!pending) return;
+    const timer = setTimeout(() => void run(), 8000);
+    return () => clearTimeout(timer);
+  }, [pending, report, run]);
+
   const results = report?.results ?? [];
   const rank: Record<string, number> = {
     suboptimal: 0,
@@ -115,8 +127,24 @@ export function TuneUp() {
         </p>
       )}
 
+      {/* Nine "could not read" cards would be technically accurate and
+          completely misleading: one collector has not run yet, not nine that
+          failed. Say the true thing instead and let the retry fill the page. */}
+      {pending && (
+        <div className="rounded-xl border border-hairline bg-surface p-4">
+          <p className="text-[13px] leading-relaxed text-ink-2">
+            Warden has not read this machine&rsquo;s configuration yet. That
+            collector runs every two minutes rather than every two seconds,
+            because none of these settings change while you watch.
+          </p>
+          <p className="mt-1.5 text-[12px] text-muted">
+            This page will fill in on its own.
+          </p>
+        </div>
+      )}
+
       <div className="space-y-2.5">
-        {sorted.map((result) => (
+        {!pending && sorted.map((result) => (
           <Finding
             key={result.check_id}
             result={result}
@@ -147,6 +175,9 @@ function summary(
   settled: number,
 ): string {
   if (report === null) return "Looking at settings that are easy to get wrong…";
+  if (report.first_reading_pending) {
+    return "Taking the first configuration reading. This takes about a minute after launch.";
+  }
   const total = report.results.length;
   if (worth === 0 && depends === 0) {
     return `Warden checked ${total} settings. All of them are already right.`;

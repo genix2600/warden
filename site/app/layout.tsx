@@ -3,7 +3,7 @@ import "./globals.css";
 import { Footer, Header } from "@/components/chrome";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://warden.vercel.app"),
+  metadataBase: new URL("https://warden-genix2600s-projects.vercel.app"),
   title: {
     default: "Warden: the Windows troubleshooter that shows its work",
     template: "%s · Warden",

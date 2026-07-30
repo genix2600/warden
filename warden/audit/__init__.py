@@ -96,6 +96,23 @@ _check_coverage()
 BY_CHECK: dict[str, Check] = {check.id: check for check in CHECKS}
 
 
+def _first_reading_pending(store: ObservationStore) -> bool:
+    """True while the configuration collector has yet to report anything.
+
+    Worth a field of its own because of what the first minute after launch
+    otherwise looks like: ``sys.audit`` samples every 120 seconds and two of its
+    probes are allowed 30, so a Tune-up page opened straight after launch finds
+    an empty store and reports nine checks it "could not read". That reads as
+    nine broken collectors when it is one collector that has not run yet, and
+    the difference is exactly the sort the rest of Warden is careful about.
+
+    Deliberately keyed on the absence of *any* ``audit.`` source rather than on
+    a timer, so a collector that is genuinely wedged eventually stops being
+    excused and starts being reported.
+    """
+    return not any(source.startswith("audit.") for source in store.sources())
+
+
 def run_audit(store: ObservationStore) -> AuditReport:
     """Run every check once against the current readings.
 
@@ -104,7 +121,7 @@ def run_audit(store: ObservationStore) -> AuditReport:
     thirty-three, and an audit that silently returns fewer findings than it has
     checks would be lying by omission.
     """
-    report = AuditReport()
+    report = AuditReport(first_reading_pending=_first_reading_pending(store))
     for check in CHECKS:
         try:
             report.results.append(check.run(store))

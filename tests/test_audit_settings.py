@@ -11,6 +11,7 @@ from datetime import timedelta
 
 from pydantic import JsonValue
 
+from warden.audit import run_audit
 from warden.audit.settings import (
     DriverAgeCheck,
     PowerPlanCheck,
@@ -201,3 +202,36 @@ class TestNothingReadYet:
             StorageSenseCheck(),
         ):
             assert check.run(empty).status is CheckStatus.COULD_NOT_READ, check.id
+
+
+class TestFirstReadingPending:
+    """The first minute after launch, which used to look like nine failures.
+
+    ``sys.audit`` samples every 120 seconds and two of its probes are allowed
+    30, so a Tune-up page opened immediately after launch reads an empty store.
+    Every check correctly says ``could_not_read``, and the page correctly says
+    nine collectors are broken, which is nine times wronger than the truth.
+    """
+
+    def test_empty_store_is_pending_rather_than_broken(self) -> None:
+        report = run_audit(ObservationStore())
+        assert report.first_reading_pending is True
+        assert report.unreadable == len(report.results)
+
+    def test_one_reading_is_enough_to_stop_making_excuses(self) -> None:
+        """A collector that reported once is no longer given the benefit of
+        the doubt, so a genuinely wedged probe still surfaces as unreadable."""
+        store = store_with("audit.power.profile", {"scheme": "Balanced"})
+        report = run_audit(store)
+        assert report.first_reading_pending is False
+        assert report.unreadable > 0  # the other probes did not report
+
+    def test_a_populated_store_is_never_pending(self) -> None:
+        store = ObservationStore()
+        store.ingest(
+            [
+                reading("audit.drivers", {"drivers": []}),
+                reading("audit.power.profile", {"scheme": "Balanced"}),
+            ]
+        )
+        assert run_audit(store).first_reading_pending is False

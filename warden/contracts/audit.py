@@ -212,6 +212,15 @@ class AuditReport(Contract):
     results: list[CheckResult] = Field(default_factory=list)
     recommendations: list[Recommendation] = Field(default_factory=list)
 
+    first_reading_pending: bool = Field(
+        default=False,
+        description=(
+            "The configuration collector has not reported yet, so every result in "
+            "this report is could_not_read for one uninteresting reason. Distinct "
+            "from a collector that ran and failed."
+        ),
+    )
+
     @property
     def optimal(self) -> int:
         return sum(1 for r in self.results if r.status is CheckStatus.OPTIMAL)
