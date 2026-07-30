@@ -133,6 +133,21 @@ class TestClock:
         assert symptoms[0].facts["never_synced"] is True
         assert symptoms[0].facts["pending_peers"] == ["time.windows.com,0x9"]
 
+    def test_a_free_running_clock_is_a_note_and_not_a_fault(self, store: ObservationStore) -> None:
+        """Reported from a real machine whose clock read correctly.
+
+        Warden called this a fault, offered a resync that could not work because
+        the time server was unreachable, and did it repeatedly. The clock was
+        right the whole time. Warden also cannot say how wrong a clock is here:
+        w32tm reports a phase offset of zero when it has never reached a server,
+        which means "no idea" rather than "accurate". So the honest severity is
+        the lowest one, and the copy has to say the time is probably fine.
+        """
+        clock(store, source="Local CMOS Clock")
+        symptom = TimeSyncDetector().evaluate(store)[0]
+        assert symptom.severity is Severity.INFO
+        assert "probably correct right now" in symptom.detail
+
     def test_the_explanation_leads_with_the_consequence(self, store: ObservationStore) -> None:
         """Nobody reports an unsynchronised clock. They report broken websites."""
         clock(store, source="Local CMOS Clock")

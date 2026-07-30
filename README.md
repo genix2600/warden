@@ -65,8 +65,8 @@ answered.
 | Interface | React 18, TypeScript, Vite, Tailwind v4 | Types are **generated** from the backend's OpenAPI document, never hand-written |
 | Local model | `qwen2.5:1.5b-instruct`, bundled | Schema-constrained JSON decoding. Small on purpose: measured 15-19s per decision on a CPU-only laptop, against 60-100s for a 7B, which never finishes inside any sensible ceiling |
 | System access | PowerShell CIM/Net cmdlets over a persistent host, `psutil`, `netsh`, ACPI/WMI, optional LibreHardwareMonitor via pythonnet | Locale-independent where it matters; see below |
-| Tests | pytest — 200 tests, no hardware required | The whole detection and reasoning layer runs on any machine |
-| Quality | ruff (lint + format) clean, mypy clean across all 69 modules, strict on `contracts/` | |
+| Tests | pytest — 211 tests, no hardware required | The whole detection and reasoning layer runs on any machine |
+| Quality | ruff (lint + format) clean, mypy clean across all 70 modules, strict on `contracts/` | |
 
 ### Two implementation details worth a look
 
@@ -99,8 +99,8 @@ Build the folder, copy it anywhere, double-click `Warden.exe`. No Python, no
 Node, no virtual environment on the machine that runs it.
 
 ```powershell
-.\scriptsetch-model.ps1      # stages the local model, once (~1 GB)
-.\scriptsuild-installer.ps1  # produces dist\Warden-Setup-0.1.0.exe
+.\scripts\fetch-model.ps1      # stages the local model, once (~1 GB)
+.\scripts\build-installer.ps1  # produces dist\Warden-Setup-0.9.0.exe
 ```
 
 The build is unsigned, so on a machine that has not seen it before **SmartScreen
@@ -112,9 +112,9 @@ There is no console, so a packaged run writes its log to
 overrides live beside it, under `%LOCALAPPDATA%\Warden\` — never inside the
 application folder, which is read-only and replaced on upgrade.
 
-First launch takes about 20 seconds before the window has data: PowerShell
-loading its networking and storage modules, which Warden pays once at startup
-rather than on the first poll.
+The window opens in about three seconds. Collectors and the local model warm up
+behind it, which takes another ten to thirty on a first run, and the interface
+says what it is waiting for rather than showing an empty dashboard.
 
 ### From source
 
@@ -147,7 +147,7 @@ same report is at `GET /api/doctor`.
 ```powershell
 python -m warden --headless --port 8099   # backend only, browsable API at /docs
 cd ui && npm run dev                       # interface with hot reload
-python -m pytest                           # 200 tests, ~6s, no hardware needed
+python -m pytest                           # 211 tests, ~3s, no hardware needed
 cd ui && npm run gen:types                 # regenerate TS types from the contracts
 ```
 
@@ -219,7 +219,7 @@ warden/
   domains.py     Translates symptom codes into the 13 areas a person recognises.
   paths.py       What ships with Warden versus what belongs to the user.
 ui/              React interface; src/generated/ is produced, not written.
-tests/           200 tests, none of which need Windows-specific hardware.
+tests/           211 tests, none of which need Windows-specific hardware.
 docs/            The calibration measurements behind every threshold.
 ```
 

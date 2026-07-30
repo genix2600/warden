@@ -6,11 +6,21 @@ will not load, or their password stopped working, or Office wants activating
 again. All of those are certificate validity checks failing against a clock that
 has quietly drifted.
 
-The finding is deliberately not "the time is wrong". A free-running clock can be
-seconds out today and twenty minutes out in three months, and the moment it
-crosses the tolerance every TLS handshake on the machine starts failing at once.
-Reporting the condition rather than waiting for the consequence is the entire
-value here.
+The finding is deliberately not "the time is wrong", and that is also why it is
+only INFO. A free-running clock is usually correct today and wrong in three
+months, so calling it a fault while the clock still reads right is a false alarm:
+the user checks, sees the right time, and learns to ignore Warden.
+
+Warden cannot measure how wrong the clock is, either. w32tm reports a phase
+offset of zero on a machine that has never reached a server, because there is
+nothing to compare against -- a zero here means "no idea", not "accurate". With
+no way to quantify the error, claiming there is one would be inventing a number,
+so this reports the condition at the severity the condition deserves and leaves
+the decision with the user.
+
+Worth knowing because the failure, when it arrives, is baffling: secure sites
+stop loading and sign-ins start failing, all at once, and nothing points at the
+clock.
 """
 
 from __future__ import annotations
@@ -45,14 +55,21 @@ class TimeSyncDetector(Detector):
         return [
             self.symptom(
                 "TIME.NOT_SYNCHRONISED",
-                severity=Severity.WARN,
-                title="The clock is not being corrected by any time server",
+                # INFO, not WARN. The clock is very likely right at this moment;
+                # what is wrong is that nothing is keeping it right.
+                severity=Severity.INFO,
+                title="Nothing is keeping this clock accurate",
                 detail=(
-                    f"Windows reports the time source as {sync.get('source')!r} with "
+                    "The time is probably correct right now. It is running off the "
+                    "motherboard clock rather than being corrected by a time server, "
+                    "so it will drift, and a clock a few minutes out breaks secure "
+                    "websites and sign-ins in ways that never look like a clock "
+                    f"problem. Windows reports the source as {sync.get('source')!r}, "
                     f"last successful sync {sync.get('last_sync')!r}"
                     + (
-                        f", and its configured server {pending[0].get('peer')!r} has never "
-                        f"answered."
+                        f", and {pending[0].get('peer')!r} has never answered, which "
+                        "usually means a firewall is blocking it rather than anything "
+                        "being broken here."
                         if pending
                         else "."
                     )

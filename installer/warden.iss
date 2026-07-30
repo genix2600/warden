@@ -21,7 +21,7 @@
 ;   build-installer.ps1 sets the Edition suffix so the two do not collide.
 
 #define AppName "Warden"
-#define AppVersion "0.1.0"
+#define AppVersion "0.9.0"
 #define AppPublisher "Warden"
 #define AppURL "https://github.com/genix2600/warden"
 #define AppExe "Warden.exe"
