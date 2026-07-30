@@ -51,7 +51,8 @@ function Hero() {
           </Link>
         </div>
         <p className="rise mt-3 text-[12px] text-muted">
-          Free · {INSTALLER_SIZE} · the AI model is inside the download, so nothing phones home
+          Free · {INSTALLER_SIZE} · the AI runs on your machine, so nothing you look at
+          leaves it
         </p>
 
         <div className="mt-16 grid grid-cols-2 gap-3 sm:grid-cols-4">

@@ -35,6 +35,8 @@ export const api = {
   doctor: () => json<DoctorReport>("/api/doctor"),
   // POST, and only on demand. There is no polling loop for this anywhere.
   audit: () => json<AuditReport>("/api/audit", { method: "POST" }),
+  downloadModel: () =>
+    json<{ started: boolean; detail: string }>("/api/model/download", { method: "POST" }),
   relaunchElevated: () =>
     json<{ started: boolean; detail: string }>("/api/relaunch-elevated", { method: "POST" }),
   approve: (id: string) => json<Incident>(`/api/incidents/${id}/approve`, { method: "POST" }),

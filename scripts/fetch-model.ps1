@@ -19,9 +19,24 @@
     The model tag to stage. The default is deliberately small: Warden ships to
     laptops with no discrete GPU, where a 7B model produces 4-6 tokens/s and
     never finishes a decision inside the client's timeout.
+
+.PARAMETER RuntimeOnly
+    Stage ollama.exe and its CPU libraries, but not the model weights.
+
+    This is the default edition. The weights are 940 MB of the 1,061 MB staged
+    here, and leaving them out takes the installer from 967 MB to about 160 MB
+    -- which is the difference between someone trying Warden and closing the
+    tab. Warden then fetches the model on request, from the Readiness page,
+    into %LOCALAPPDATA% where it survives an upgrade.
+
+    Run without this flag to stage everything and build the offline edition,
+    for machines that will never have a usable connection.
 #>
 [CmdletBinding()]
-param([string]$Model = 'qwen2.5:1.5b-instruct')
+param(
+    [string]$Model = 'qwen2.5:1.5b-instruct',
+    [switch]$RuntimeOnly
+)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -48,9 +63,12 @@ Write-Note "using $ollama"
 # to Stop, PowerShell 5.1 turns each of those lines into a NativeCommandError
 # and kills the script mid-download, so the preference is relaxed across the
 # call and the exit code checked explicitly instead.
-$already = (& $ollama list) -match [regex]::Escape($Model)
+if ($RuntimeOnly) {
+    Write-Note "runtime only: skipping the model, Warden will fetch it on request"
+}
+$already = $RuntimeOnly -or ((& $ollama list) -match [regex]::Escape($Model))
 if ($already) {
-    Write-Note "$Model is already pulled"
+    if (-not $RuntimeOnly) { Write-Note "$Model is already pulled" }
 } else {
     Write-Step "Pulling $Model"
     $previous = $ErrorActionPreference
@@ -62,7 +80,7 @@ if ($already) {
 }
 
 $source = Join-Path $env:USERPROFILE '.ollama\models'
-if (-not (Test-Path $source)) { throw "no model store at $source" }
+if (-not $RuntimeOnly -and -not (Test-Path $source)) { throw "no model store at $source" }
 
 # -- Stage --------------------------------------------------------------------
 
@@ -102,7 +120,9 @@ if (Test-Path $libSource) {
     }
 }
 
-Copy-Item $source (Join-Path $runtime 'models') -Recurse -Force
+if (-not $RuntimeOnly) {
+    Copy-Item $source (Join-Path $runtime 'models') -Recurse -Force
+}
 
 # -- Attribution --------------------------------------------------------------
 
@@ -113,7 +133,7 @@ Third-party components bundled with Warden
 ollama.exe and supporting libraries
     Ollama, MIT License. https://github.com/ollama/ollama
 
-models/
+models/ (offline edition only)
     $Model weights. Qwen2.5 is released by Alibaba Cloud under Apache License 2.0.
     https://huggingface.co/Qwen
 

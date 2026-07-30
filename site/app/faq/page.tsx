@@ -15,9 +15,16 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
     q: "Does it need an internet connection?",
     a: (
       <>
-        No — and that is deliberate rather than a bonus. The AI model is inside the download
-        and runs on your processor. A troubleshooter that needed the internet to explain why
-        you have no internet would be useless in the exact situation it is for.
+        Not to work. The reasoning happens on your own processor, so once Warden is set up
+        it keeps working when the network is the thing that is broken — which matters,
+        because a troubleshooter that needs the internet to explain why you have no internet
+        is useless in the exact situation it is for.
+        <br />
+        <br />
+        The one thing that does need a connection is fetching the AI model, once, if you
+        want it. Everything works before that using the built-in rules engine, and there is
+        an offline edition with the model already inside if the machine will never be
+        online.
       </>
     ),
   },
@@ -52,12 +59,16 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
     ),
   },
   {
-    q: "Why is the download nearly a gigabyte?",
+    q: "Why is the download so small for something with an AI in it?",
     a: (
       <>
-        Because the AI model is bundled. The alternative — a small download that fetches a
-        model on first run — fails on a machine with no working network, which is one of the
-        main things Warden exists to fix.
+        Because the model is not in it. The installer is about 46 MB; the model is roughly a
+        gigabyte and is fetched separately, on request, from the Readiness page.
+        <br />
+        <br />
+        Warden is useful before you do that — the rules engine handles every scenario end to
+        end, and the interface tells you which one answered. Spending a gigabyte of your
+        bandwidth because you opened an application is not a decision Warden makes for you.
       </>
     ),
   },

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { AgentSnapshot, DoctorReport } from "../types";
 import { ElevateButton } from "../components/ElevateButton";
+import { GetModelButton } from "../components/GetModelButton";
 import { Icon } from "../components/Icon";
 import { PageHeader } from "../components/PageHeader";
 import { StatusDot } from "../components/StatusDot";
@@ -143,6 +144,9 @@ function Group({
                   demanded at launch, so Warden still runs on a machine where
                   the user is not an administrator. */}
               {!check.ok && check.name === "Administrator" && <ElevateButton />}
+              {/* The standard build ships without weights to keep the download
+                  small; this is where they are fetched, on request. */}
+              {!check.ok && check.name === "Local model" && <GetModelButton />}
             </div>
             {check.ok && (
               <span className="mt-0.5 shrink-0 text-good">

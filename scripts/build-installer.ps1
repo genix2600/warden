@@ -16,9 +16,14 @@
 .PARAMETER SkipBuild
     Compile the installer against the existing dist\Warden. For iterating on the
     .iss itself, where the payload has not changed.
+
+.PARAMETER Offline
+    Build the edition that carries the model weights inside it -- about 967 MB
+    rather than 160 MB. Stage the payload with scripts\fetch-model.ps1 (no
+    -RuntimeOnly) first, or this produces the small build under the big name.
 #>
 [CmdletBinding()]
-param([switch]$SkipBuild)
+param([switch]$SkipBuild, [switch]$Offline)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -75,7 +80,8 @@ Write-Step "Compiling the installer"
 # fetch-model.ps1 for the same workaround.
 $previous = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
-& $iscc (Join-Path $root 'installer\warden.iss')
+$edition = if ($Offline) { '-offline' } else { '' }
+& $iscc "/DEdition=$edition" (Join-Path $root 'installer\warden.iss')
 $code = $LASTEXITCODE
 $ErrorActionPreference = $previous
 if ($code -ne 0) { throw "Inno Setup failed (exit $code)" }
@@ -83,7 +89,7 @@ if ($code -ne 0) { throw "Inno Setup failed (exit $code)" }
 # -- Report -------------------------------------------------------------------
 
 $version = (Select-String -Path 'pyproject.toml' -Pattern '^version\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
-$setup = Join-Path $root "dist\Warden-Setup-$version.exe"
+$setup = Join-Path $root "dist\Warden-Setup-$version$edition.exe"
 if (-not (Test-Path $setup)) { throw "Inno Setup reported success but $setup does not exist" }
 
 $size = '{0:N0} MB' -f ((Get-Item $setup).Length / 1MB)

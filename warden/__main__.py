@@ -146,7 +146,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     agent = Agent(reasoner=Reasoner(client=client, use_llm=not args.no_llm))
-    app = create_app(agent, record=not args.no_record)
+    app = create_app(agent, record=not args.no_record, model_host=model_host)
     port = args.port or _free_port()
 
     config = uvicorn.Config(

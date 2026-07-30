@@ -25,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from warden.audit import run_audit
-from warden.contracts import ActionSpec, AgentEvent, AuditReport, Incident
+from warden.contracts import ActionSpec, AgentEvent, AgentLogEvent, AuditReport, Incident
 from warden.contracts.state import AgentSnapshot, DomainHealth
 from warden.demo import DemoHarness
 from warden.domains import DOMAINS, summarise
@@ -33,6 +33,7 @@ from warden.executor.restore import describe as describe_restore
 from warden.orchestrator import Agent, SessionRecorder
 from warden.paths import resource_path
 from warden.playbooks import CANDIDATES, REGISTRY
+from warden.reasoner.host import ModelHost, has_weights
 from warden.reasoner.llm import DEFAULT_MODEL
 from warden.winenv import describe_host, is_admin, is_frozen, relaunch_elevated
 
@@ -88,6 +89,29 @@ def _shutdown_this_instance() -> None:
     os._exit(0)
 
 
+def _no_model_detail() -> str:
+    """Why there is no model, phrased for whichever build this is.
+
+    The standard download is about 160 MB and leaves the weights out; the
+    offline one carries them. Telling someone with the lean build to run an
+    Ollama command they do not have would be useless advice, so the two cases
+    say different things.
+    """
+    from warden.reasoner.host import bundled_binary
+
+    if bundled_binary() is not None:
+        return (
+            "not downloaded yet. Warden works without it -- the rules engine handles "
+            "every scenario -- but a model writes better explanations. About 1 GB, "
+            "downloaded once and kept."
+        )
+    return (
+        f"no model service found. Install Ollama and run `ollama pull {DEFAULT_MODEL}`, "
+        "or use the offline build, which carries the model inside it. Warden still "
+        "works -- the rules engine handles every scenario."
+    )
+
+
 class CapabilityReport(BaseModel):
     """The complete list of things Warden can do to a machine.
 
@@ -101,7 +125,11 @@ class CapabilityReport(BaseModel):
     symptoms_with_no_software_fix: list[str]
 
 
-def create_app(agent: Agent | None = None, record: bool = True) -> FastAPI:
+def create_app(
+    agent: Agent | None = None,
+    record: bool = True,
+    model_host: ModelHost | None = None,
+) -> FastAPI:
     agent = agent or Agent()
     harness = DemoHarness()
     recorder: SessionRecorder | None = None
@@ -128,12 +156,12 @@ def create_app(agent: Agent | None = None, record: bool = True) -> FastAPI:
         summary="An agentic Windows diagnostician that shows its evidence and asks first.",
         lifespan=lifespan,
     )
-    app.include_router(_routes(agent, harness))
+    app.include_router(_routes(agent, harness, model_host))
     _mount_ui(app)
     return app
 
 
-def _routes(agent: Agent, harness: DemoHarness) -> APIRouter:
+def _routes(agent: Agent, harness: DemoHarness, model_host: ModelHost | None) -> APIRouter:
     router = APIRouter(prefix="/api")
 
     @router.get("/state", response_model=AgentSnapshot)
@@ -256,6 +284,46 @@ def _routes(agent: Agent, harness: DemoHarness) -> APIRouter:
         return RelaunchResponse(
             started=True,
             detail="Warden is restarting with administrator rights. This window will close.",
+        )
+
+    @router.post("/model/download", response_model=RelaunchResponse)
+    async def download_model() -> RelaunchResponse:
+        """Fetch the local model, on request.
+
+        Never automatic. Warden works without it -- the rules engine answers
+        every scenario end to end -- so spending a gigabyte of somebody's
+        bandwidth is a decision for them, not a thing that happens because they
+        opened an application.
+        """
+        host = model_host
+        if host is None or host.endpoint is None:
+            return RelaunchResponse(
+                started=False,
+                detail=(
+                    "This build has no model runtime, so there is nothing to download "
+                    "into. Install Ollama separately, or use the offline build."
+                ),
+            )
+        if has_weights():
+            return RelaunchResponse(started=False, detail="The model is already installed.")
+
+        def progress(line: str) -> None:
+            agent.bus.publish(AgentLogEvent(text=f"Downloading the model — {line}"))
+
+        agent.bus.publish(AgentLogEvent(text=f"Downloading {DEFAULT_MODEL}. This is about 1 GB."))
+        ok = await asyncio.to_thread(host.pull, DEFAULT_MODEL, progress)
+        if not ok:
+            return RelaunchResponse(
+                started=False,
+                detail=(
+                    "The download did not finish. Check the connection and try again — "
+                    "nothing is broken, and Warden keeps working without it."
+                ),
+            )
+        await agent.reasoner.probe_model()
+        return RelaunchResponse(
+            started=True,
+            detail="The model is installed. New diagnoses will use it from now on.",
         )
 
     @router.get("/doctor", response_model=DoctorReport)
@@ -388,8 +456,7 @@ async def _doctor(agent: Agent) -> DoctorReport:
             detail=(
                 f"{model} responding on {agent.reasoner.client.endpoint}"
                 if model
-                else f"not running; pull one with `ollama pull {DEFAULT_MODEL}`. "
-                "Warden still works -- the rules engine handles every scenario."
+                else _no_model_detail()
             ),
             blocking=False,
         )

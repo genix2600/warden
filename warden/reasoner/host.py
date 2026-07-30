@@ -33,9 +33,10 @@ import socket
 import subprocess
 import time
 import urllib.request
+from collections.abc import Callable
 from pathlib import Path
 
-from warden.paths import resource_path
+from warden.paths import data_path, resource_path
 
 log = logging.getLogger(__name__)
 
@@ -57,8 +58,35 @@ def bundled_binary() -> Path | None:
 
 
 def bundled_models() -> Path | None:
+    """Weights shipped inside the build, if this is the offline edition."""
     path = resource_path(RUNTIME_DIR, "models")
     return path if path.is_dir() else None
+
+
+def model_store() -> Path:
+    """Where the server should look for weights.
+
+    Two editions ship. The offline one carries the weights inside the bundle, so
+    it serves them from there -- read-only is fine, and nothing will ever be
+    written back. The standard one is about 160 MB instead of 967 MB and has no
+    weights at all, so the store has to be somewhere the user can write, and
+    somewhere that survives an upgrade replacing the application folder.
+
+    A downloaded model therefore lands beside the recorded sessions, and
+    reinstalling Warden does not mean fetching a gigabyte again.
+    """
+    bundled = bundled_models()
+    return bundled if bundled is not None else data_path("models")
+
+
+def has_weights() -> bool:
+    """Whether any model is actually present, bundled or downloaded.
+
+    A manifests directory with nothing under it is what an interrupted download
+    leaves behind, so the check is for a file rather than for the folder.
+    """
+    manifests = model_store() / "manifests"
+    return manifests.is_dir() and any(manifests.rglob("*"))
 
 
 def _free_port() -> int:
@@ -78,14 +106,25 @@ class ModelHost:
 
     def __init__(self) -> None:
         self._process: subprocess.Popen[bytes] | None = None
+        self._binary: Path | None = None
+        self._environment: dict[str, str] = {}
         self.endpoint: str | None = None
 
     def start(self) -> str | None:
-        """Launch the bundled server. Returns its endpoint, or None if absent."""
-        binary, models = bundled_binary(), bundled_models()
-        if binary is None or models is None:
+        """Launch the bundled server. Returns its endpoint, or None if absent.
+
+        Starts even with no weights present. The server is what makes the
+        download possible in the first place, and a running server with an empty
+        store is a perfectly coherent state -- the reasoner sees no model, says
+        so, and the rules engine answers until one arrives.
+        """
+        binary = bundled_binary()
+        if binary is None:
             log.info("no model runtime in this build; looking for a system Ollama")
             return None
+
+        models = model_store()
+        models.mkdir(parents=True, exist_ok=True)
 
         port = _free_port()
         host = f"127.0.0.1:{port}"
@@ -100,6 +139,9 @@ class ModelHost:
             "OLLAMA_MAX_LOADED_MODELS": "1",
         }
 
+        self._binary = binary
+        self._environment = environment
+
         try:
             self._process = subprocess.Popen(
                 [str(binary), "serve"],
@@ -113,7 +155,7 @@ class ModelHost:
             log.warning("could not start the bundled model runtime: %s", exc)
             return None
 
-        if not self._wait_until_ready(port):
+        if not self._wait_until_ready(port, expect_models=has_weights()):
             log.warning("the bundled model runtime did not become ready in time")
             self.stop()
             return None
@@ -122,34 +164,77 @@ class ModelHost:
         log.info("model runtime listening on %s with weights from %s", self.endpoint, models)
         return self.endpoint
 
-    def _wait_until_ready(self, port: int) -> bool:
-        """Wait for the model list, not merely for the socket.
+    def _wait_until_ready(self, port: int, *, expect_models: bool) -> bool:
+        """Wait for the server to answer, and for the store to be indexed.
 
         Ollama binds its port before it has finished indexing the model store,
         so an accepted connection is not the same as a usable server. Warden
-        asked the socket once and got an empty model list back, concluded there
-        was no model, and fell through to the rules engine -- with the weights
+        asked the socket once, got an empty model list back, concluded there was
+        no model, and fell through to the rules engine -- with the weights
         sitting right there. On a slower machine, or one reading these files off
-        a freshly extracted zip, that window is wider, not narrower.
+        a freshly extracted zip, that window is wider rather than narrower.
+
+        ``expect_models`` is what keeps that fix from breaking the lean build.
+        When weights are on disk, an empty list means "still indexing" and is
+        worth waiting through. When there are none, an empty list is the correct
+        and final answer, and waiting for it to change would stall startup for
+        the full timeout before giving up on a server that was fine all along.
         """
         deadline = time.monotonic() + _START_TIMEOUT_S
         while time.monotonic() < deadline:
             if self._process is not None and self._process.poll() is not None:
                 return False  # It exited; waiting out the timeout helps nobody.
-            if self._models_visible(port):
+            listed = self._list_models(port)
+            if listed is not None and (listed or not expect_models):
                 return True
             time.sleep(0.3)
         return False
 
     @staticmethod
-    def _models_visible(port: int) -> bool:
+    def _list_models(port: int) -> list[object] | None:
+        """The server's model list, or None if it is not answering yet."""
         request = urllib.request.Request(f"http://127.0.0.1:{port}/api/tags")
         try:
             with urllib.request.urlopen(request, timeout=1.0) as response:
                 payload = json.load(response)
         except (OSError, ValueError):
+            return None
+        models = payload.get("models")
+        return list(models) if isinstance(models, list) else []
+
+    def pull(self, model: str, on_progress: Callable[[str], None] | None = None) -> bool:
+        """Download a model into the store. Blocking; call it off the event loop.
+
+        Only reachable when the user asks for it. Warden does not fetch a
+        gigabyte in the background on first launch: the application is useful
+        without it -- the rules engine answers every scenario end to end -- and
+        deciding to spend someone's bandwidth on their behalf is not Warden's
+        call to make.
+        """
+        if self._binary is None:
             return False
-        return bool(payload.get("models"))
+        try:
+            process = subprocess.Popen(
+                [str(self._binary), "pull", model],
+                env=self._environment,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                creationflags=_CREATE_NO_WINDOW,
+            )
+        except OSError as exc:
+            log.warning("could not start the model download: %s", exc)
+            return False
+
+        if process.stdout is not None:
+            for line in process.stdout:
+                # Ollama redraws one progress line with carriage returns, so the
+                # last segment is the current state rather than a new event.
+                text = line.replace("\r", "\n").strip().splitlines()
+                if text and on_progress is not None:
+                    on_progress(text[-1])
+        return process.wait() == 0
 
     def stop(self) -> None:
         """Terminate the child. Called on shutdown; safe to call twice."""

@@ -13,16 +13,24 @@
 ;   the user meets that limit. An application that could not start without
 ;   administrator would have no business installing without one either.
 ;
-;   The payload is about 1.1 GB, most of it model weights. That is not bloat to
-;   apologise for: it is why a machine that has never installed anything can
-;   still answer with a real local model instead of falling back to a rules
-;   engine and looking like the scripted troubleshooter Warden exists to replace.
+;   Two editions, from the same script. The standard one is about 160 MB and
+;   carries the model runtime but no weights; Warden fetches those on request,
+;   from the Readiness page, into %LOCALAPPDATA% where they survive an upgrade.
+;   The -offline edition bundles the weights too, at about 967 MB, for machines
+;   that will never have a usable connection. Passing -Offline to
+;   build-installer.ps1 sets the Edition suffix so the two do not collide.
 
 #define AppName "Warden"
 #define AppVersion "0.1.0"
 #define AppPublisher "Warden"
 #define AppURL "https://github.com/genix2600/warden"
 #define AppExe "Warden.exe"
+
+; Set by build-installer.ps1 to "-offline" for the edition that carries the
+; model weights, so the two outputs do not overwrite one another.
+#ifndef Edition
+  #define Edition ""
+#endif
 
 [Setup]
 ; Fixed, so a reinstall upgrades in place instead of appearing twice in
@@ -46,7 +54,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 
 LicenseFile=..\LICENSE
 OutputDir=..\dist
-OutputBaseFilename={#AppName}-Setup-{#AppVersion}
+OutputBaseFilename={#AppName}-Setup-{#AppVersion}{#Edition}
 WizardStyle=modern
 SolidCompression=yes
 ; Not lzma2/max. The bulk of the payload is a quantised GGUF model, which is

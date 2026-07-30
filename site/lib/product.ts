@@ -18,7 +18,15 @@ export const VERSION = "0.1.0";
  *  editing when a new version ships. */
 export const DOWNLOAD_URL = `${REPO}/releases/latest/download/Warden-Setup-${VERSION}.exe`;
 export const ZIP_URL = `${REPO}/releases/latest/download/Warden-${VERSION}.zip`;
-export const INSTALLER_SIZE = "967 MB";
+
+/** The edition that carries the model weights, for machines that will never
+ *  have a usable connection. Six times the size, and worth it for exactly one
+ *  audience. */
+export const OFFLINE_URL = `${REPO}/releases/latest/download/Warden-Setup-${VERSION}-offline.exe`;
+
+export const INSTALLER_SIZE = "46 MB";
+export const OFFLINE_SIZE = "967 MB";
+export const MODEL_SIZE = "1 GB";
 
 export const STATS = [
   { value: 13, label: "areas watched", suffix: "" },
