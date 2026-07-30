@@ -40,9 +40,15 @@ import time
 from typing import Literal
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from warden.reasoner.llm import LlmDecision, LlmUnavailable
+from warden.reasoner.llm import (
+    _RISK,
+    _RISK_WORDS,
+    LlmDecision,
+    LlmUnavailable,
+    _coerce_choice,
+)
 
 log = logging.getLogger(__name__)
 
@@ -101,6 +107,14 @@ class ComposedCommand(BaseModel):
     risk: Literal["reads_only", "reversible", "disruptive"] = Field(
         description="How much this disturbs the machine."
     )
+
+    @field_validator("risk", mode="before")
+    @classmethod
+    def _risk(cls, value: object) -> object:
+        # Defaults to "disruptive" when unrecognised, which is the opposite of
+        # the default elsewhere. An unknown risk should read as the worst one,
+        # because this value decides whether a restore point is taken.
+        return _coerce_choice(value, _RISK, _RISK_WORDS)
 
 
 class CloudDecision(LlmDecision):

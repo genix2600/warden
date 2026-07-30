@@ -79,8 +79,30 @@ def _format_evidence(observations: list[Observation]) -> str:
 
 
 def _format_actions(
-    symptom: Symptom, registry: PlaybookRegistry, exclude: frozenset[str] = frozenset()
+    symptom: Symptom,
+    registry: PlaybookRegistry,
+    exclude: frozenset[str] = frozenset(),
+    may_compose: bool = False,
 ) -> str:
+    """The candidate list, and what an empty one means.
+
+    An empty list means two completely different things and the prompt used to
+    say only one of them. ``may_compose`` picks which.
+
+    A code **present in** ``CANDIDATES`` with an empty tuple is a deliberate
+    refusal -- a worn battery, a failing disk, overheating. There the old
+    message is exactly right and stays right for both models: no command helps,
+    the verdict is ``needs_service``.
+
+    A code **absent from** ``CANDIDATES`` is simply one nobody wrote a playbook
+    for, which is every problem a user types in their own words. Telling a cloud
+    model "the registry has been reviewed and contains no command that can fix
+    this, the correct verdict is needs_service" is then a flat instruction to
+    give up -- and it obeyed. Measured: a broken search index, a muted audio
+    device and an offline printer all came back as "contact a technician",
+    because the user prompt contradicted the system prompt and the more specific
+    one won. That is the whole reason the cloud path looked useless.
+    """
     candidates = tuple(a for a in CANDIDATES.get(symptom.code, ()) if a not in exclude)
     if not candidates:
         exhausted = (
@@ -89,6 +111,17 @@ def _format_actions(
             if exclude
             else ""
         )
+        deliberate = symptom.code in CANDIDATES
+        if may_compose and not deliberate:
+            return (
+                "  (no reviewed action covers this)\n\n"
+                "  This is the normal case for a problem described in words, and it is\n"
+                "  what you are here for. Warden's seventeen reviewed actions cover the\n"
+                "  faults its detectors can find; this is not one of them.\n\n"
+                "  Write a command in \"command\". Do NOT answer \"needs_service\" merely\n"
+                "  because the list is empty -- an empty list here means nobody wrote a\n"
+                "  playbook, not that the problem is physical." + exhausted
+            )
         return (
             "  (no actions are available for this symptom)\n\n"
             "  This is not an oversight. Warden's action registry has been reviewed and\n"
@@ -118,6 +151,7 @@ def build_user_prompt(
     registry: PlaybookRegistry,
     exclude: frozenset[str] = frozenset(),
     note: str = "",
+    may_compose: bool = False,
     extra_sources: tuple[str, ...] = (
         "sys.cpu.percent",
         "sys.memory",
@@ -165,7 +199,7 @@ OTHER CURRENT READINGS
 {_format_evidence(context)}
 {described}{already_tried}
 ACTIONS YOU MAY CHOOSE FROM
-{_format_actions(symptom, registry, exclude)}
+{_format_actions(symptom, registry, exclude, may_compose)}
 
 Answer with the required JSON object.\
 """
@@ -188,10 +222,27 @@ CHOOSING WHAT TO DO
    write has none of those properties, so it is always the second choice.
 2. If nothing in the list fits, write one command in "command" and leave \
    "action_id" as an empty string. One command, the smallest one that makes \
-   progress. Do not chain fixes.
-3. If the problem is physical (a worn battery, a failing disk, overheating, a \
-   radio switched off by a hardware key) set verdict to "needs_service" and write \
-   no command. No command repairs hardware and offering one is worse than saying so.
+   progress. Do not chain fixes. **This is the case you are here for.** The \
+   local model already covers the seventeen reviewed actions; you are being \
+   asked because the problem is outside them.
+3. Use "needs_service" ONLY when the cause is physical and no command could \
+   ever help: a worn-out battery, a failing disk, dust and thermal paste, a \
+   radio switched off by a hardware key, a dead port.
+
+   It is NOT for "this needs more investigation", NOT for "I am not certain", \
+   and NOT for "a technician could look at it". Almost every Windows fault a \
+   person reports is software, and telling them to find a technician for a \
+   corrupt search index or a muted audio device is the useless non-answer this \
+   product exists to replace. If you are unsure, write the smallest safe \
+   command that would tell you more, or set "needs_more_data" and say in \
+   "reply" what reading would settle it.
+
+   Worked examples of the distinction:
+     search index broken       -> command (stop wsearch, delete the index, start)
+     no sound after an update  -> command (restart audiosrv, or re-enable the device)
+     printer offline           -> command (restart spooler)
+     laptop very hot and slow  -> needs_service (a heatsink is physical)
+     disk reporting SMART errors -> needs_service (back up, replace it)
 
 WRITING A COMMAND
 
@@ -221,10 +272,26 @@ BEING HONEST
 If the user asked a question in words, answer it in "reply". Otherwise leave \
 "reply" empty.
 
+THE EXACT VALUES THESE FIELDS ACCEPT
+
+Several of these are closed vocabularies rather than free text. Measured on a \
+real reply, a model answered "Windows Search" for domain, "Unknown" for \
+likelihood and "Medium" for urgency: right answers in the wrong vocabulary. \
+Warden now maps a near miss onto the nearest valid value, but say it exactly \
+and it will not have to guess.
+
+  domain        software | configuration | driver | hardware | environment
+                This is the layer to blame, not the name of the product.
+  likelihood    a number between 0 and 1. Not a word, not a percentage.
+  verdict       actionable | needs_service | needs_more_data
+  service_who   user | technician
+                Who physically acts, not the name of a support organisation.
+  urgency       routine | soon | urgent
+  risk          reads_only | reversible | disruptive
+
 Answer with a single JSON object with these keys: summary, hypotheses (each with \
-cause, domain, likelihood, reasoning, supporting, contradicting), verdict \
-("actionable" | "needs_service" | "needs_more_data"), action_id, params, command \
-(null, or an object with argv, explain, changes, reversible, undo, check, \
-requires_admin, risk), service_reason, service_who, service_next_step, \
-interim_mitigation, urgency, reply.\
+cause, domain, likelihood, reasoning, supporting, contradicting), verdict, \
+action_id, params, command (null, or an object with argv, explain, changes, \
+reversible, undo, check, requires_admin, risk), service_reason, service_who, \
+service_next_step, interim_mitigation, urgency, reply.\
 """

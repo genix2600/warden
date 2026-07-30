@@ -138,13 +138,35 @@ class TestWellFormedness:
         assert diagnosis.ranked_hypotheses[0].supporting == []
         assert any("do not exist" in note for note in diagnosis.reasoner.guardrail_rejections)
 
-    def test_likelihood_is_clamped(
+    def test_a_number_above_one_is_read_as_a_percentage(
         self, wifi_symptom: Symptom, disconnected_store: ObservationStore
     ) -> None:
+        """This used to clamp 42.0 to 1.0. It now reads it as 42%.
+
+        Both are guesses about a value that does not fit the field, and this is
+        the better one: a model writing 42 into a 0-to-1 field has produced a
+        percentage, not certainty. Cloud replies do it constantly, and
+        clamping turned "somewhat likely" into "definitely this", which is the
+        wrong direction for a product that argues against overstatement.
+        """
         d = decision(
             hypotheses=[
                 LlmHypothesis(
                     cause="Certainly this.", domain="configuration", likelihood=42.0, reasoning="x"
+                )
+            ]
+        )
+        assert run(d, wifi_symptom, disconnected_store).ranked_hypotheses[0].likelihood == 0.42
+
+    def test_a_genuinely_impossible_number_still_clamps(
+        self, wifi_symptom: Symptom, disconnected_store: ObservationStore
+    ) -> None:
+        """Past 100 there is no reading that makes sense, so the contract's
+        0..1 bound is enforced rather than guessed at."""
+        d = decision(
+            hypotheses=[
+                LlmHypothesis(
+                    cause="Certainly this.", domain="configuration", likelihood=900.0, reasoning="x"
                 )
             ]
         )

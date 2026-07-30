@@ -149,10 +149,17 @@ class Diagnosis(Contract):
         if self.verdict is Verdict.NEEDS_SERVICE:
             if self.proposal is not None:
                 raise ValueError("a needs_service verdict must not carry an executable proposal")
+            if self.composed is not None:
+                raise ValueError("a needs_service verdict must not carry a composed command")
             if self.service_advice is None:
                 raise ValueError("a needs_service verdict must carry service advice")
-        if self.verdict is Verdict.ACTIONABLE and self.proposal is None:
-            raise ValueError("an actionable verdict must carry a proposal")
+        # `composed` satisfies this as well as `proposal` does. The rule being
+        # enforced is "actionable means there is something to approve", not
+        # "actionable means the registry produced it" -- the two were the same
+        # thing until a cloud model could write a command, and keeping the
+        # narrower wording would have made every composed command a crash.
+        if self.verdict is Verdict.ACTIONABLE and self.proposal is None and self.composed is None:
+            raise ValueError("an actionable verdict must carry a proposal or a composed command")
         return self
 
     @property

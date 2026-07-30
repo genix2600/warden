@@ -183,7 +183,9 @@ class Reasoner:
         assert self._cloud is not None
         decision, model, latency_ms = await self._cloud.decide(
             CLOUD_SYSTEM_PROMPT,
-            build_user_prompt(symptom, store, self._registry, exclude, note),
+            build_user_prompt(
+                symptom, store, self._registry, exclude, note, may_compose=True
+            ),
         )
 
         # A reviewed action always wins. It is grounded against what was
@@ -220,7 +222,14 @@ def build_composed_diagnosis(
     Split out of the class so that the chat path, which has no symptom from a
     detector, can reuse it without going through incident machinery.
     """
-    from warden.contracts import ComposedCommand, Domain, Hypothesis, ReasonerInfo, Verdict
+    from warden.contracts import (
+        ComposedCommand,
+        Domain,
+        Hypothesis,
+        ReasonerInfo,
+        ServiceAdvice,
+        Verdict,
+    )
     from warden.executor.freeform import screen
     from warden.reasoner.cloud import CloudDecision
 
@@ -245,8 +254,59 @@ def build_composed_diagnosis(
         if composed is not None and composed.refused is None
         else Verdict.NEEDS_MORE_DATA
     )
+
+    # `Diagnosis` enforces that a needs_service verdict carries service advice,
+    # and this used to set the verdict while dropping the fields the model had
+    # already filled in -- so a perfectly good "this needs a person" answer
+    # raised a ValidationError, the diagnosis task swallowed it, and the
+    # incident landed in `monitoring` with no diagnosis at all and nothing on
+    # screen to say why. Caught on the first live call against a real model.
+    #
+    # The verdict is downgraded rather than the advice invented. A model that
+    # says "needs a technician" and cannot say what for has not produced advice,
+    # and printing an empty reason under a confident heading is the failure mode
+    # this whole contract exists to prevent.
+    advice: ServiceAdvice | None = None
+    rejections: list[str] = []
     if decision.verdict == "needs_service":
-        verdict = Verdict.NEEDS_SERVICE
+        reason = decision.service_reason.strip()
+        next_step = decision.service_next_step.strip()
+        physical = any(h.domain == "hardware" for h in decision.hypotheses)
+
+        if not physical:
+            # Measured, repeatedly, against a real model: asked about a broken
+            # search index, a muted audio device and an offline printer, it
+            # answered "needs_service / contact a technician" to all three. All
+            # three are software and all three have a one-line fix.
+            #
+            # `needs_service` means *no command could ever help*, which is a
+            # claim about physics. A model reaching for it because it is
+            # uncertain produces the exact useless non-answer this product was
+            # built to replace, and no amount of prompt wording made that
+            # reliable -- so it is checked here instead, against the model's own
+            # stated cause. If nothing it listed is hardware, it does not get to
+            # send the user to a repair shop.
+            rejections.append(
+                "The model wanted to send you to a technician, but none of the "
+                "causes it gave are physical. Warden downgraded that: a software "
+                "fault is not something a repair shop can help with either."
+            )
+            verdict = Verdict.NEEDS_MORE_DATA
+        elif reason and next_step:
+            verdict = Verdict.NEEDS_SERVICE
+            composed = None  # a physical cause cannot also have a command
+            advice = ServiceAdvice(
+                reason=reason,
+                who=decision.service_who,
+                next_step=next_step,
+                interim_mitigation=decision.interim_mitigation.strip() or None,
+                urgency=decision.urgency,
+            )
+        else:
+            # It said "needs a person" and could not say what for. That is not
+            # advice, and printing an empty reason under a confident heading is
+            # the failure this contract exists to prevent.
+            verdict = Verdict.NEEDS_MORE_DATA
 
     return Diagnosis(
         symptom_codes=[symptom.code],
@@ -268,15 +328,19 @@ def build_composed_diagnosis(
             for h in decision.hypotheses
         ],
         verdict=verdict,
+        service_advice=advice,
         composed=composed,
         reasoner=ReasonerInfo(
             mode=ReasonerMode.CLOUD,
             model=model,
             latency_ms=latency_ms,
             guardrail_rejections=(
-                [f"Warden refused the command it wrote: {composed.refused}"]
-                if composed is not None and composed.refused
-                else []
+                rejections
+                + (
+                    [f"Warden refused the command it wrote: {composed.refused}"]
+                    if composed is not None and composed.refused
+                    else []
+                )
             ),
         ),
     )
