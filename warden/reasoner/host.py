@@ -37,6 +37,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from warden.paths import data_path, resource_path
+from warden.winenv import is_windows
 
 log = logging.getLogger(__name__)
 
@@ -49,6 +50,59 @@ RUNTIME_DIR = "runtime"
 _START_TIMEOUT_S = 60.0
 
 _CREATE_NO_WINDOW = 0x08000000
+
+#: Assigning the child to a Windows job object with this limit makes the OS kill
+#: it when the last handle to the job closes, which happens when Warden's process
+#: dies for any reason at all.
+#:
+#: Needed because stop() runs in a finally and a finally does not run
+#: when the process is force-killed, crashes, or is ended from Task Manager. In
+#: testing that left seven orphaned ollama.exe processes behind, each able to
+#: hold a model in memory with nothing left to talk to it. A stray background
+#: process that outlives the application is exactly the kind of thing that gets
+#: software uninstalled.
+_JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
+_JOBOBJECT_EXTENDED_LIMIT_INFORMATION = 9
+
+
+def _reap_with_parent(process: subprocess.Popen[bytes]) -> None:
+    """Ask Windows to kill this child whenever Warden stops existing.
+
+    Best effort: if any of it fails the child simply keeps the old behaviour of
+    being reaped by stop() on a clean exit, which is the common case. Losing
+    the guarantee is worth less than refusing to start the model over it.
+    """
+    if not is_windows():
+        return
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class _Limits(ctypes.Structure):
+            _fields_ = [("raw", ctypes.c_byte * 144)]
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        job = kernel32.CreateJobObjectW(None, None)
+        if not job:
+            return
+
+        limits = _Limits()
+        # LimitFlags sits at offset 16 inside JOBOBJECT_BASIC_LIMIT_INFORMATION,
+        # which is the first member of the extended structure.
+        ctypes.memmove(
+            ctypes.byref(limits, 16),
+            ctypes.byref(wintypes.DWORD(_JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE)),
+            4,
+        )
+        kernel32.SetInformationJobObject(
+            job, _JOBOBJECT_EXTENDED_LIMIT_INFORMATION, ctypes.byref(limits), ctypes.sizeof(limits)
+        )
+        handle = kernel32.OpenProcess(0x1F0FFF, False, process.pid)
+        if handle:
+            kernel32.AssignProcessToJobObject(job, handle)
+            kernel32.CloseHandle(handle)
+    except Exception:
+        log.debug("could not attach the model runtime to a job object", exc_info=True)
 
 
 def bundled_binary() -> Path | None:
@@ -176,6 +230,10 @@ class ModelHost:
         except OSError as exc:
             log.warning("could not start the bundled model runtime: %s", exc)
             return None
+
+        # So a force-kill or a crash does not leave it running with a model
+        # loaded and nothing left to ask it anything.
+        _reap_with_parent(self._process)
 
         if not self._wait_until_ready(port, expect_models=has_weights()):
             log.warning("the bundled model runtime did not become ready in time")
