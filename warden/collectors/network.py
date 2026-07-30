@@ -70,11 +70,40 @@ def parse_wlan_interfaces(text: str) -> list[dict[str, str]]:
     Values legitimately contain colons (MAC addresses, cipher suites), so the
     split is on the *first* colon only. Keys are lowercased and compared exactly,
     which matters: a substring match for "ssid" would also swallow "AP BSSID".
+
+    **Values also legitimately span lines**, and the version of this parser that
+    skipped every line without a colon silently dropped the second half of them.
+    The case that cost us a release:
+
+    .. code-block:: text
+
+        Radio status           : Hardware On
+                                 Software Off
+
+    The continuation carries the entire meaning. Dropping it left ``radio
+    status`` reading ``"Hardware On"``, so a radio the user had switched off in
+    software was reported as merely disconnected, and the detector raised
+    ``NET.WIFI.DISCONNECTED`` -- a symptom with a reconnect action -- instead of
+    ``NET.WIFI.RADIO_OFF``, which is deliberately unfixable and would have said
+    "flip the switch". Warden proposed a command for a problem no command can
+    reach, which is the failure mode the empty candidate lists exist to prevent.
+
+    A continuation is an indented line with no colon arriving after a key. It is
+    joined to that key with a single space rather than a newline, because every
+    consumer of these records does substring tests on a flat string.
     """
     blocks: list[dict[str, str]] = []
     current: dict[str, str] = {}
+    last_key: str | None = None
     for raw in text.splitlines():
+        if not raw.strip():
+            last_key = None  # a blank line ends any continuation
+            continue
         if ":" not in raw:
+            # Only an indented line can continue a value. An unindented one is
+            # a heading or a separator and belongs to nothing.
+            if last_key is not None and raw[:1].isspace():
+                current[last_key] = f"{current[last_key]} {raw.strip()}".strip()
             continue
         key, _, value = raw.partition(":")
         key = key.strip().lower()
@@ -85,6 +114,7 @@ def parse_wlan_interfaces(text: str) -> list[dict[str, str]]:
             blocks.append(current)
             current = {}
         current[key] = value
+        last_key = key
     if current:
         blocks.append(current)
     return [b for b in blocks if "state" in b or "radio status" in b]

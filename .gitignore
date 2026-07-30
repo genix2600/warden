@@ -37,6 +37,12 @@ warden.local.toml
 # checkout data_path() resolves into the repo, so it lands here instead.
 settings.json
 
+# The Groq API key, if the user has enabled the cloud model. Named explicitly
+# rather than relying on the settings.json rule above, even though data_path()
+# puts both in the same place: this repository is public, and a secret must not
+# depend on a line written for something else still happening to cover it.
+credentials.json
+
 # OS
 Thumbs.db
 desktop.ini

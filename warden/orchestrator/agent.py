@@ -131,6 +131,9 @@ class Agent:
         self._collector_errors: dict[str, str] = {}
         #: Symptom code -> monotonic time before which it must not reopen.
         self._reopen_after: dict[str, float] = {}
+        #: Symptom codes the user has silenced for good. Loaded from settings by
+        #: the API layer at startup, so the agent stays free of file I/O.
+        self.muted: set[str] = set()
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -249,6 +252,30 @@ class Agent:
             self._publish_status()
 
     def _on_symptom_cleared(self, code: str) -> None:
+        """A detector stopped reporting a code. That is not the same as fixed.
+
+        This method used to close any non-terminal incident as ``RESOLVED``,
+        which the interface renders as *"Fixed and verified"* -- the only value
+        it paints green. On an incident that had already run an action and
+        failed verification, that produced a card whose green header contradicted
+        the red chip directly beneath it, and a History line reading "Fixed and
+        verified. the adapter reports state 'disconnected'".
+
+        A code goes quiet for three reasons and only one of them is a fix:
+
+        * the fault was repaired,
+        * the same fault **re-classified** to a different code, which is exactly
+          what happens when a radio switching off flips ``NET.WIFI.DISCONNECTED``
+          to ``NET.WIFI.RADIO_OFF``, or
+        * the collector missed two samples in ten seconds, so the detector could
+          not confirm the condition and reported nothing, which is
+          indistinguishable from health at this layer.
+
+        Warden cannot tell them apart from the absence alone. So the rule is
+        narrow, and it is the whole fix: **a vanished symptom may only close an
+        incident that has never executed anything.** Once an action has run, the
+        outcome belongs to the verifier and to nothing else.
+        """
         incident_id = self._incident_by_code.get(code)
         if incident_id is None:
             return
@@ -257,8 +284,23 @@ class Agent:
             return
         if incident.state in (IncidentState.EXECUTING, IncidentState.VERIFYING):
             return  # the verifier owns the outcome; do not race it
+
+        if incident.execution is not None or incident.history:
+            incident.notes.append(
+                f"{code} stopped being reported, but Warden had already run "
+                f"something and could not confirm it worked. A symptom going "
+                f"quiet is not evidence of a fix, so this is being left open "
+                f"rather than called resolved."
+            )
+            self._log(
+                f"{code} stopped being reported. Not closing it: an action ran "
+                f"here and was not verified.",
+                level="warn",
+            )
+            return
+
         incident.notes.append("The condition cleared before any action was taken.")
-        incident.close(IncidentState.RESOLVED)
+        self._close(incident, IncidentState.RESOLVED)
         self._incident_by_code.pop(code, None)
         self._log(f"{code} cleared on its own; closing the incident without acting.")
         self.bus.publish(IncidentClosedEvent(incident=incident))
@@ -290,6 +332,15 @@ class Agent:
     def _open_incident(self, symptom: Symptom) -> None:
         existing = self._incident_by_code.get(symptom.code)
         if existing and not self.incidents[existing].state.is_terminal:
+            return
+
+        if symptom.code in self.muted:
+            # Muted is stronger than the cooldown and survives a restart. The
+            # user has said this is not a fault on their machine: a network they
+            # keep Public on purpose, a clock they know is right. Warden keeps
+            # detecting it and keeps showing it on the Health page, and stops
+            # having an opinion about it.
+            log.debug("%s is muted; not opening an incident", symptom.code)
             return
 
         until = self._reopen_after.get(symptom.code)
@@ -340,7 +391,7 @@ class Agent:
                     + " ".join(diagnosis.proposal.rendered_argv)
                 )
             elif diagnosis.verdict is Verdict.NEEDS_SERVICE:
-                incident.close(IncidentState.NEEDS_SERVICE)
+                self._close(incident, IncidentState.NEEDS_SERVICE)
                 self._log(
                     "No command can fix this. Routing to a physical fix instead.",
                     level="warn",
@@ -358,12 +409,31 @@ class Agent:
 
     # -- the approval gate -------------------------------------------------
 
-    async def decline(self, incident_id: str) -> Incident:
+    async def decline(self, incident_id: str, *, mute: bool = False) -> Incident:
+        """Refuse a proposal, optionally for good.
+
+        ``mute`` is the answer to Warden asking the same question forever. Some
+        findings are not faults on a particular machine: a network deliberately
+        left Public, a clock that is right but has no time server to prove it.
+        The cooldown alone treats those as "ask again in thirty minutes", which
+        over a working day is still nagging, and nagging about a decision
+        already made is how a tool teaches people to ignore it.
+        """
         incident = self._require(incident_id, IncidentState.AWAITING_APPROVAL)
         incident.decision = Decision.DECLINED
         incident.decided_at = utcnow()
-        incident.notes.append("You declined the proposed fix. Nothing was run.")
-        incident.close(IncidentState.DECLINED)
+        if mute:
+            codes = [s.code for s in incident.symptoms]
+            self.muted.update(codes)
+            incident.notes.append(
+                "You declined this and asked not to be told about it again. "
+                "Warden will keep detecting it and keep showing it on the Health "
+                "page, and will not propose a fix for it."
+            )
+            self._log(f"Muted {', '.join(codes)}. Still watched, no longer proposed.")
+        else:
+            incident.notes.append("You declined the proposed fix. Nothing was run.")
+        self._close(incident, IncidentState.DECLINED)
         proposal = incident.diagnosis.proposal if incident.diagnosis else None
         if proposal is not None:
             self.bus.publish(
@@ -422,7 +492,7 @@ class Agent:
 
             if record.outcome is ExecutionOutcome.BLOCKED:
                 incident.notes.append(record.blocked_reason or "The action was blocked.")
-                incident.close(IncidentState.UNRESOLVED)
+                self._close(incident, IncidentState.UNRESOLVED)
                 self._log(f"Refused to run: {record.blocked_reason}", level="error")
                 self.bus.publish(ExecutionFinishedEvent(incident_id=incident.id, record=record))
                 self.bus.publish(IncidentClosedEvent(incident=incident))
@@ -444,7 +514,7 @@ class Agent:
             self.bus.publish(ExecutionFinishedEvent(incident_id=incident.id, record=record))
 
             if verification.outcome is VerificationOutcome.PASSED:
-                incident.close(IncidentState.RESOLVED)
+                self._close(incident, IncidentState.RESOLVED)
                 self._log(f"Fixed, and verified: {verification.detail}")
                 self.bus.publish(IncidentClosedEvent(incident=incident))
                 self._forget(incident)
@@ -463,7 +533,7 @@ class Agent:
             await self._diagnose(incident)
             return incident
 
-        incident.close(IncidentState.UNRESOLVED)
+        self._close(incident, IncidentState.UNRESOLVED)
         self._log(
             "Everything Warden can safely try for this has been tried, and the problem "
             "is still present.",
@@ -508,6 +578,25 @@ class Agent:
         if state.is_terminal:
             self._start_cooldown(incident, state)
         self.bus.publish(IncidentStateEvent(incident_id=incident.id, state=state))
+
+    def _close(self, incident: Incident, state: IncidentState) -> None:
+        """Close an incident **and** hold its symptom down afterwards.
+
+        This exists because the cooldown did not work, and had never worked.
+        ``_start_cooldown`` was reachable only through ``_set_state``, but every
+        one of the six terminal transitions called ``Incident.close()`` directly,
+        which sets the state on the model and knows nothing about the agent. So
+        ``_reopen_after`` was written to by nothing, ``_REOPEN_AFTER_S`` and
+        ``_REOPEN_AFTER_UNACTIONABLE_S`` were decorative, and a symptom that was
+        still present simply reopened on the very next tick.
+
+        The visible result was Warden asking to switch a network profile to
+        private, being declined, and asking again seconds later, forever. The
+        thirty-minute hold on a declined proposal was in the source the whole
+        time and never once ran.
+        """
+        incident.close(state)
+        self._start_cooldown(incident, state)
 
     def _start_cooldown(self, incident: Incident, state: IncidentState) -> None:
         """Hold this symptom's code down for a while now the incident is over."""

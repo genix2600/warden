@@ -23,9 +23,24 @@ from warden.store import ObservationStore, as_dict, as_float
 #: (passed, human-readable detail). ``passed`` of None means inconclusive.
 Predicate = Callable[[ObservationStore, dict[str, JsonValue]], tuple[bool | None, str]]
 
+#: How old a reading may be and still count as evidence that a fix worked.
+#:
+#: The verifier force-runs the relevant collectors immediately before calling a
+#: predicate, so in the healthy case every reading here is under a second old.
+#: A reading older than this means that forced probe produced nothing -- the
+#: `netsh` call timed out, the PowerShell host was killed mid-command, the
+#: adapter vanished -- and what is left in the store is the sample from *before*
+#: the fault, which says the machine was fine.
+#:
+#: Twenty seconds is loose enough to survive one slow probe and tight enough
+#: that no pre-fault reading can survive to be mistaken for proof. Past it,
+#: predicates return None: "could not tell", which is a first-class outcome
+#: everywhere downstream and escalates rather than closing the incident.
+MAX_EVIDENCE_AGE_S = 20.0
+
 
 def wifi_associated(store: ObservationStore, args: dict[str, JsonValue]) -> tuple[bool | None, str]:
-    link = store.latest("net.wifi.link")
+    link = store.latest("net.wifi.link", max_age_s=MAX_EVIDENCE_AGE_S)
     if link is None or not isinstance(link.value, dict):
         return None, "no wireless reading available to check"
     state = link.value.get("state")
@@ -41,7 +56,7 @@ def wifi_associated(store: ObservationStore, args: dict[str, JsonValue]) -> tupl
 def internet_reachable(
     store: ObservationStore, args: dict[str, JsonValue]
 ) -> tuple[bool | None, str]:
-    observation = store.latest("net.connectivity.internet")
+    observation = store.latest("net.connectivity.internet", max_age_s=MAX_EVIDENCE_AGE_S)
     if observation is None:
         return None, "no reachability reading available"
     if observation.value is True:
@@ -50,7 +65,7 @@ def internet_reachable(
 
 
 def dns_resolves(store: ObservationStore, args: dict[str, JsonValue]) -> tuple[bool | None, str]:
-    observation = store.latest("net.connectivity.dns")
+    observation = store.latest("net.connectivity.dns", max_age_s=MAX_EVIDENCE_AGE_S)
     if observation is None or not isinstance(observation.value, dict):
         return None, "no DNS reading available"
     host = observation.value.get("host")
@@ -62,7 +77,7 @@ def dns_resolves(store: ObservationStore, args: dict[str, JsonValue]) -> tuple[b
 def gateway_reachable(
     store: ObservationStore, args: dict[str, JsonValue]
 ) -> tuple[bool | None, str]:
-    observation = store.latest("net.connectivity.gateway")
+    observation = store.latest("net.connectivity.gateway", max_age_s=MAX_EVIDENCE_AGE_S)
     if observation is None or not isinstance(observation.value, dict):
         return None, "no gateway reading available"
     reachable = observation.value.get("reachable")
@@ -73,7 +88,7 @@ def gateway_reachable(
 
 
 def device_healthy(store: ObservationStore, args: dict[str, JsonValue]) -> tuple[bool | None, str]:
-    observation = store.latest("dev.problem_devices")
+    observation = store.latest("dev.problem_devices", max_age_s=MAX_EVIDENCE_AGE_S)
     if observation is None or not isinstance(observation.value, list):
         return None, "no device inventory available"
     device_id = args.get("device_id")
@@ -94,7 +109,7 @@ def service_running(store: ObservationStore, args: dict[str, JsonValue]) -> tupl
     a second later because a dependency is missing, which is precisely the case
     an exit code cannot distinguish from success.
     """
-    observation = store.latest("sys.services")
+    observation = store.latest("sys.services", max_age_s=MAX_EVIDENCE_AGE_S)
     if observation is None or not isinstance(observation.value, list):
         return None, "no service reading is available to check"
     wanted = args.get("service")
@@ -110,7 +125,7 @@ def service_running(store: ObservationStore, args: dict[str, JsonValue]) -> tupl
 def privacy_allowed(store: ObservationStore, args: dict[str, JsonValue]) -> tuple[bool | None, str]:
     """Is the capability no longer denied, at the scope we changed?"""
     label = "camera" if args.get("capability") == "webcam" else "microphone"
-    observation = store.latest(f"privacy.{label}")
+    observation = store.latest(f"privacy.{label}", max_age_s=MAX_EVIDENCE_AGE_S)
     if observation is None or not isinstance(observation.value, dict):
         return None, f"no privacy reading for the {label} is available"
     scope = str(args.get("scope") or "user")
@@ -121,7 +136,7 @@ def privacy_allowed(store: ObservationStore, args: dict[str, JsonValue]) -> tupl
 
 
 def camera_enabled(store: ObservationStore, args: dict[str, JsonValue]) -> tuple[bool | None, str]:
-    observation = store.latest("cam.devices")
+    observation = store.latest("cam.devices", max_age_s=MAX_EVIDENCE_AGE_S)
     if observation is None or not isinstance(observation.value, list):
         return None, "no camera inventory is available"
     wanted = args.get("instance_id")
@@ -136,7 +151,7 @@ def camera_enabled(store: ObservationStore, args: dict[str, JsonValue]) -> tuple
 def net_profile_private(
     store: ObservationStore, args: dict[str, JsonValue]
 ) -> tuple[bool | None, str]:
-    observation = store.latest("net.profile")
+    observation = store.latest("net.profile", max_age_s=MAX_EVIDENCE_AGE_S)
     if observation is None or not isinstance(observation.value, list):
         return None, "no network profile reading is available"
     wanted = args.get("name")
@@ -152,7 +167,7 @@ def net_profile_private(
 def hosts_entry_cleared(
     store: ObservationStore, args: dict[str, JsonValue]
 ) -> tuple[bool | None, str]:
-    observation = store.latest("net.hosts")
+    observation = store.latest("net.hosts", max_age_s=MAX_EVIDENCE_AGE_S)
     if observation is None or not isinstance(observation.value, list):
         return None, "no hosts file reading is available"
     hostname = str(args.get("hostname") or "").lower()
@@ -173,7 +188,7 @@ def time_synchronised(
     own output, which prints a success message in cases where the resync did
     not in fact take.
     """
-    observation = store.latest("sys.time.sync")
+    observation = store.latest("sys.time.sync", max_age_s=MAX_EVIDENCE_AGE_S)
     if observation is None or not isinstance(observation.value, dict):
         return None, "no clock reading is available"
     sync = observation.value
@@ -183,20 +198,31 @@ def time_synchronised(
 
 
 def report_only(store: ObservationStore, args: dict[str, JsonValue]) -> tuple[bool | None, str]:
-    """For READ_ONLY actions: success means the command produced its report.
+    """For READ_ONLY actions: the command produced its report, and that is all.
 
-    Nothing changed, so there is nothing to re-measure. The executor's exit code
-    is the whole result, and pretending to verify a state change that was never
-    attempted would be theatre.
+    This used to return ``True``, on the reasoning that a command which changes
+    nothing has nothing to re-measure. The reasoning was right and the return
+    value was wrong, because ``True`` does not mean "the command succeeded" one
+    layer up -- it means *the incident is fixed*, and the orchestrator acts on it
+    by closing the incident as ``RESOLVED``.
+
+    The consequence was ugly and reachable. ``net.wifi.scan`` is the second rung
+    of the wireless ladder. Approving it after a failed reconnect scanned for
+    networks, passed vacuously, and closed the incident as fixed with the
+    adapter still down, silently abandoning the third rung.
+
+    ``None`` is the honest answer. Gathering information tells you nothing about
+    whether the problem is fixed, and "could not tell" is a state the rest of
+    the system already handles: it does not close the incident, and it escalates.
     """
-    return True, "information gathered; no system state was changed"
+    return None, "information gathered; nothing was changed, so nothing is proven"
 
 
 def storage_sense_on(
     store: ObservationStore, args: dict[str, JsonValue]
 ) -> tuple[bool | None, str]:
     """Windows now clears temporary files by itself."""
-    observation = store.latest("audit.storage.reclaimable")
+    observation = store.latest("audit.storage.reclaimable", max_age_s=MAX_EVIDENCE_AGE_S)
     if observation is None:
         return None, "no storage reading is available to check"
     if bool(as_dict(observation.value).get("storage_sense_on")):
@@ -208,7 +234,7 @@ def processor_uncapped(
     store: ObservationStore, args: dict[str, JsonValue]
 ) -> tuple[bool | None, str]:
     """The processor may use its full speed on mains power again."""
-    observation = store.latest("audit.power.profile")
+    observation = store.latest("audit.power.profile", max_age_s=MAX_EVIDENCE_AGE_S)
     if observation is None:
         return None, "no power profile reading is available to check"
     ceiling = as_float(as_dict(observation.value).get("ac_max_pct"))

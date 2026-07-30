@@ -8,8 +8,14 @@ here affects a diagnosis.
 
 Kept in ``%LOCALAPPDATA%\\Warden`` beside the recorded sessions rather than in
 the application folder, so an upgrade does not reset them and an install to a
-read-only location still works. The file holds a handful of scalars and, by
-design, has nowhere to put a credential.
+read-only location still works.
+
+**No credential is ever stored here.** That used to be true because Warden had
+no credential to store; now that a cloud model can be enabled with a key the
+user supplies, it is true because the key lives in a separate file
+(:mod:`warden.credentials`) that this model cannot reach and the settings API
+never returns. Keeping them apart is what allows ``GET /api/settings`` to stay a
+plain, fully-serialised dump of everything below.
 """
 
 from __future__ import annotations
@@ -46,6 +52,15 @@ class Settings(BaseModel):
             "Whether a finding should open an incident on its own. Off by default: "
             "Warden watches everything, but being told about a printer you do not "
             "own is noise, so reasoning waits until you ask."
+        ),
+    )
+
+    muted_symptoms: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Symptom codes the user has told Warden to stop proposing fixes for. "
+            "Still detected, still shown on the Health page, never turned into a "
+            "proposal again until unmuted."
         ),
     )
 

@@ -94,10 +94,29 @@ class ObservationStore:
 
     # -- reads -------------------------------------------------------------
 
-    def latest(self, source: str) -> Observation | None:
+    def latest(self, source: str, max_age_s: float | None = None) -> Observation | None:
+        """Most recent reading from a source, optionally refusing stale ones.
+
+        ``max_age_s`` exists for verification, and the distinction it draws is
+        the difference between an honest answer and a dangerous one. A caller
+        that gets ``None`` because a source was never read reports "could not
+        tell". A caller that gets a ten-minute-old reading has no idea it is
+        holding history, and history is systematically misleading here: the last
+        reading before a fault is by definition the last *healthy* one. Asking
+        "is the adapter connected?" and being handed the sample from before it
+        dropped answers yes, forever.
+
+        Retention is 600 seconds, so without this the window for that mistake is
+        ten minutes wide.
+        """
         with self._lock:
             series = self._by_source.get(source)
-            return series[-1] if series else None
+            observation = series[-1] if series else None
+        if observation is None or max_age_s is None:
+            return observation
+        if observation.captured_at < utcnow() - timedelta(seconds=max_age_s):
+            return None
+        return observation
 
     def value(self, source: str, default: JsonValue = None) -> JsonValue:
         obs = self.latest(source)

@@ -173,7 +173,9 @@ def create_app(
             recorder = SessionRecorder()
             agent.bus.add_sink(recorder)
             agent.session_path = str(recorder.path)
-        agent.autodiagnose = settings.load().autodiagnose
+        saved = settings.load()
+        agent.autodiagnose = saved.autodiagnose
+        agent.muted = set(saved.muted_symptoms)
         await agent.start()
         try:
             yield
@@ -248,6 +250,7 @@ def _routes(agent: Agent, harness: DemoHarness, model_host: ModelHost | None) ->
         """Save preferences, and apply the ones the running agent cares about."""
         settings.save(incoming)
         agent.autodiagnose = incoming.autodiagnose
+        agent.muted = set(incoming.muted_symptoms)
         return incoming
 
     @router.post("/check", response_model=CheckStarted)
@@ -358,13 +361,24 @@ def _routes(agent: Agent, harness: DemoHarness, model_host: ModelHost | None) ->
             raise HTTPException(409, str(exc)) from exc
 
     @router.post("/incidents/{incident_id}/decline", response_model=Incident)
-    async def decline(incident_id: str) -> Incident:
+    async def decline(incident_id: str, mute: bool = False) -> Incident:
+        """Refuse a proposal. With ``mute``, refuse it permanently.
+
+        The agent keeps the muted set in memory; persisting it is the API's job
+        because the agent does no file I/O. Written after the decline succeeds,
+        so a 404 or 409 cannot silently mute something.
+        """
         try:
-            return await agent.decline(incident_id)
+            incident = await agent.decline(incident_id, mute=mute)
         except KeyError as exc:
             raise HTTPException(404, str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
+        if mute:
+            saved = settings.load()
+            saved.muted_symptoms = sorted(agent.muted)
+            settings.save(saved)
+        return incident
 
     @router.post("/relaunch-elevated", response_model=RelaunchResponse)
     async def relaunch() -> RelaunchResponse:
