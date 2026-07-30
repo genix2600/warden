@@ -33,6 +33,10 @@ sessions/
 # Local, machine-specific overrides. Never contains credentials by design.
 warden.local.toml
 
+# User preferences. Written beside the sessions when frozen; from a source
+# checkout data_path() resolves into the repo, so it lands here instead.
+settings.json
+
 # OS
 Thumbs.db
 desktop.ini
