@@ -63,10 +63,10 @@ answered.
 | Backend | Python 3.11, FastAPI, Pydantic v2 | Best Windows introspection surface (WMI/CIM, PDH, pywin32, pythonnet); Pydantic gives typed contracts the front end is generated from |
 | Desktop shell | pywebview on WebView2 | A real desktop window at ~10 MB, using the browser engine Windows 11 already ships. One runtime instead of Electron's two |
 | Interface | React 18, TypeScript, Vite, Tailwind v4 | Types are **generated** from the backend's OpenAPI document, never hand-written |
-| Local model | Ollama, `qwen2.5:7b-instruct` | Schema-constrained JSON decoding; runs on a laptop; no account, no key |
+| Local model | `qwen2.5:1.5b-instruct`, bundled | Schema-constrained JSON decoding. Small on purpose: measured 15-19s per decision on a CPU-only laptop, against 60-100s for a 7B, which never finishes inside any sensible ceiling |
 | System access | PowerShell CIM/Net cmdlets over a persistent host, `psutil`, `netsh`, ACPI/WMI, optional LibreHardwareMonitor via pythonnet | Locale-independent where it matters; see below |
-| Tests | pytest — 62 tests, no hardware required | The whole detection and reasoning layer runs on any machine |
-| Quality | ruff (lint + format) clean, mypy clean across all 46 modules, strict on `contracts/` | |
+| Tests | pytest — 200 tests, no hardware required | The whole detection and reasoning layer runs on any machine |
+| Quality | ruff (lint + format) clean, mypy clean across all 69 modules, strict on `contracts/` | |
 
 ### Two implementation details worth a look
 
@@ -99,7 +99,8 @@ Build the folder, copy it anywhere, double-click `Warden.exe`. No Python, no
 Node, no virtual environment on the machine that runs it.
 
 ```powershell
-.\scripts\build-exe.ps1     # produces dist\Warden\ (~45 MB)
+.\scriptsetch-model.ps1      # stages the local model, once (~1 GB)
+.\scriptsuild-installer.ps1  # produces dist\Warden-Setup-0.1.0.exe
 ```
 
 The build is unsigned, so on a machine that has not seen it before **SmartScreen
@@ -127,13 +128,11 @@ cd warden
 interface and opens the window. First launch takes a couple of minutes; after
 that it skips straight to launching.
 
-**Optional, both degrade honestly if skipped:**
+The model ships inside the build, so there is nothing to install for it. Running
+from source without `runtime/` staged, Warden looks for a system Ollama and then
+falls back to the rules engine — visibly, in the header.
 
-```powershell
-ollama pull qwen2.5:7b-instruct   # written explanations instead of templated ones
-```
-
-Dropping `LibreHardwareMonitorLib.dll` into `vendor/` adds real temperature
+**Optional:** dropping `LibreHardwareMonitorLib.dll` into `vendor/` adds real temperature
 sensors (and needs an elevated run). Without it the thermal collector falls back
 through OpenHardwareMonitor's WMI namespace, ACPI thermal zones, and finally
 inference from delivered clock speed — each tier reporting lower confidence than
@@ -148,7 +147,7 @@ same report is at `GET /api/doctor`.
 ```powershell
 python -m warden --headless --port 8099   # backend only, browsable API at /docs
 cd ui && npm run dev                       # interface with hot reload
-python -m pytest                           # 172 tests, ~7s, no hardware needed
+python -m pytest                           # 200 tests, ~6s, no hardware needed
 cd ui && npm run gen:types                 # regenerate TS types from the contracts
 ```
 
@@ -220,7 +219,7 @@ warden/
   domains.py     Translates symptom codes into the 13 areas a person recognises.
   paths.py       What ships with Warden versus what belongs to the user.
 ui/              React interface; src/generated/ is produced, not written.
-tests/           172 tests, none of which need Windows-specific hardware.
+tests/           200 tests, none of which need Windows-specific hardware.
 docs/            The calibration measurements behind every threshold.
 ```
 
