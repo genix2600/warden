@@ -32,6 +32,14 @@ from warden.audit.checks import (
     RebootPendingCheck,
     WifiPowerSavingCheck,
 )
+from warden.audit.settings import (
+    DriverAgeCheck,
+    PowerPlanCheck,
+    ProcessorCapCheck,
+    ReclaimableSpaceCheck,
+    StartupLoadCheck,
+    StorageSenseCheck,
+)
 from warden.contracts import AuditReport, CheckResult, CheckStatus, utcnow
 from warden.domains import BY_ID
 from warden.store import ObservationStore
@@ -45,6 +53,12 @@ __all__ = ["CHECKS", "Check", "CheckResult", "CheckStatus", "run_audit"]
 CHECKS: tuple[Check, ...] = (
     WifiPowerSavingCheck(),
     RebootPendingCheck(),
+    ProcessorCapCheck(),
+    DriverAgeCheck(),
+    StorageSenseCheck(),
+    ReclaimableSpaceCheck(),
+    PowerPlanCheck(),
+    StartupLoadCheck(),
     DefragOnSsdCheck(),
 )
 

@@ -79,7 +79,7 @@ def describe() -> RestoreState:
             available=False,
             detail=(
                 "System Protection appears to be turned off, so Windows is not keeping "
-                "restore points. Warden will not turn it on for you — that is a system "
+                "restore points. Warden will not turn it on for you, because that is a "
                 "change, and it is yours to make in System Properties → System Protection."
             ),
         )

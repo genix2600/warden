@@ -247,7 +247,7 @@ def _routes(agent: Agent, harness: DemoHarness, model_host: ModelHost | None) ->
             return CheckStarted(
                 started=[],
                 detail=(
-                    "Nothing to look into here — Warden has not found anything wrong in this area."
+                    "Nothing to look into here. Warden has not found anything wrong in this area."
                     if domain
                     else "Nothing to look into. Warden has not found anything wrong."
                 ),
@@ -324,7 +324,7 @@ def _routes(agent: Agent, harness: DemoHarness, model_host: ModelHost | None) ->
                 started=False,
                 detail=(
                     "Warden was not restarted. If you chose No on the Windows prompt "
-                    "that is fine — nothing has changed, and everything that does not "
+                    "that is fine. Nothing has changed, and everything that does not "
                     "need administrator still works."
                 ),
             )
@@ -359,7 +359,7 @@ def _routes(agent: Agent, harness: DemoHarness, model_host: ModelHost | None) ->
             return RelaunchResponse(started=False, detail="The model is already installed.")
 
         def progress(line: str) -> None:
-            agent.bus.publish(AgentLogEvent(text=f"Downloading the model — {line}"))
+            agent.bus.publish(AgentLogEvent(text=f"Downloading the model: {line}"))
 
         agent.bus.publish(AgentLogEvent(text=f"Downloading {DEFAULT_MODEL}. This is about 1 GB."))
         ok = await asyncio.to_thread(host.pull, DEFAULT_MODEL, progress)
@@ -367,7 +367,7 @@ def _routes(agent: Agent, harness: DemoHarness, model_host: ModelHost | None) ->
             return RelaunchResponse(
                 started=False,
                 detail=(
-                    "The download did not finish. Check the connection and try again — "
+                    "The download did not finish. Check the connection and try again. "
                     "nothing is broken, and Warden keeps working without it."
                 ),
             )

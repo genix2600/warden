@@ -144,7 +144,12 @@ class RebootPendingCheck(Check):
             )
 
         days = _days_since(state.get("last_boot"))
-        waited = "an unknown time" if days is None else f"{days:.0f} day{'s' if days >= 2 else ''}"
+        if days is None:
+            waited = "an unknown time"
+        elif days < 1:
+            waited = "less than a day"
+        else:
+            waited = f"{days:.0f} day{'s' if days >= 2 else ''}"
         status = (
             CheckStatus.SUBOPTIMAL
             if days is None or days >= _REBOOT_PENDING_DAYS
@@ -152,7 +157,7 @@ class RebootPendingCheck(Check):
         )
         detail = (
             f"An update is staged and waiting for a restart, and has been for {waited}. "
-            "Until the machine restarts the update is not actually applied — and "
+            "Until the machine restarts the update is not actually applied, and "
             "Windows stops reminding you after the first few days."
         )
         if status is CheckStatus.OPTIMAL:
