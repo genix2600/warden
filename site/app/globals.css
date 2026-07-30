@@ -1,0 +1,119 @@
+@import "tailwindcss";
+
+/*
+  The same palette as the application, copied from ui/src/index.css.
+
+  Not laziness. Warden's design argument is that a tool asking to run commands
+  on your machine should look like an instrument rather than like the "PC
+  optimiser" software it competes with -- calm, dense, quiet until it genuinely
+  has something. A landing page that shouted, with red banners and a counter of
+  problems found, would refute the product on the way to describing it.
+
+  Dark-only, and chosen rather than inverted: these are the dark steps of a
+  validated palette, checked against this surface.
+*/
+@theme {
+  --color-plane: #0b0f14;
+  --color-surface: #141922;
+  --color-raised: #1b2331;
+  --color-sunken: #0f141b;
+
+  --color-ink: #f2f5f8;
+  --color-ink-2: #a9b4c2;
+  --color-muted: #6b7787;
+  --color-grid: #232c3a;
+  --color-hairline: rgba(255, 255, 255, 0.12);
+
+  --color-series-1: #3987e5;
+  --color-series-2: #d95926;
+
+  --color-good: #0ca30c;
+  --color-warning: #fab219;
+  --color-serious: #ec835a;
+  --color-critical: #d03b3b;
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Cascadia Code", "Consolas", ui-monospace, monospace;
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--color-plane);
+}
+
+body {
+  background: var(--color-plane);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--color-series-1) 40%, transparent);
+}
+
+/* Graph paper rather than a gradient blob -- the instrument reference again.
+   Faint enough to read as texture and never compete with type sitting on it. */
+.plane-grid {
+  background-image:
+    linear-gradient(to right, var(--color-grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--color-grid) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 75% 55% at 50% 0%, #000 50%, transparent 100%);
+  opacity: 0.4;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rise {
+  animation: rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes sheen {
+  0% {
+    background-position: 200% center;
+  }
+  100% {
+    background-position: -200% center;
+  }
+}
+
+/* One moving thing on the page, on one line of text. Any more and the calm
+   argument stops being credible. */
+.sheen {
+  background: linear-gradient(
+    100deg,
+    var(--color-ink-2) 40%,
+    var(--color-ink) 50%,
+    var(--color-ink-2) 60%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: sheen 7s linear infinite;
+}
+
+/* Motion is opt-in to the reader, not imposed. Anyone who has asked their
+   system for less of it gets a page that simply appears. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .rise,
+  .sheen {
+    animation: none !important;
+  }
+  .sheen {
+    color: var(--color-ink);
+  }
+}

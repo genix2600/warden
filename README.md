@@ -244,3 +244,26 @@ executable proposal is enforced there, in `diagnosis.py`, by a model validator.
 - **No installer.** It runs from source. Packaging was not where the time belonged.
 # warden
 Windows diagnostician
+
+---
+
+## The website
+
+`site/` is a Next.js app deployed to Vercel from this repository.
+
+**One setting is not discoverable and the deployment fails without it:** in the
+Vercel project, set **Root Directory** to `site`. Otherwise Vercel finds
+`pyproject.toml` at the repository root and tries to build the Python project.
+
+```powershell
+cd site
+npm install
+npm run dev      # http://localhost:3000
+npm run build    # 9 static pages, no server needed
+```
+
+The download button points at
+`releases/latest/download/Warden-Setup-<version>.exe`. The installer is roughly
+a gigabyte — far past GitHub's 100 MB file limit and Vercel's — so it lives on a
+GitHub Release rather than in the repository, and `latest` means the site needs
+no edit when a new version ships.
