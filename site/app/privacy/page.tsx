@@ -5,7 +5,9 @@ import { REPO } from "@/lib/product";
 
 export const metadata: Metadata = {
   title: "Privacy",
-  description: "Warden collects nothing, transmits nothing, and stores everything locally.",
+  description:
+    "Warden collects nothing and stores everything locally. It transmits nothing "
+    + "unless you switch on the optional cloud model, and this page says what that sends.",
 };
 
 export default function PrivacyPage() {
@@ -13,15 +15,25 @@ export default function PrivacyPage() {
     <PageShell
       eyebrow="Last updated 30 July 2026"
       title="Privacy"
-      lead="This is short because there is very little to say. Warden does not collect anything."
+      lead="This is short because there is very little to say. Warden does not collect anything, and sends nothing anywhere unless you switch on the cloud model yourself."
     >
       <Section title="What the software collects">
         <Prose>
           <p>
-            <strong className="text-ink">Nothing is transmitted.</strong> Warden reads a great
+            <strong className="text-ink">Nothing is collected.</strong> Warden reads a great
             deal about your computer: the Windows event log, installed services, device
-            inventory, network configuration, drive health, temperatures. All of it stays
-            on the machine it was read from.
+            inventory, network configuration, drive health, temperatures. All of it stays on
+            the machine it was read from, and none of it comes to us. There is no us: no
+            server, nowhere for it to go.
+          </p>
+          <p>
+            <strong className="text-ink">One exception, and it is off by default.</strong> If
+            you switch on the cloud model and supply your own API key, then when it answers a
+            diagnosis Warden sends that provider the symptom, the readings relevant to it,
+            your Windows version, and the list of actions it may choose from. Not your files,
+            not your browsing, not your account names, and nothing Warden has not itself
+            measured. Their terms govern what happens to it after that, which is a real cost
+            and the reason it is a choice rather than a default.
           </p>
           <p>
             There is no account, no licence key, no activation, no usage analytics and no crash
@@ -33,7 +45,7 @@ export default function PrivacyPage() {
 
       <Section title="What is stored, and where">
         <Prose>
-          <p>Two things, both inside your own user folder:</p>
+          <p>All inside your own user folder:</p>
         </Prose>
         <div className="mt-3 space-y-2">
           <Row
@@ -43,6 +55,10 @@ export default function PrivacyPage() {
           <Row
             path="%LOCALAPPDATA%\Warden\logs"
             what="A plain-text log of the application's own activity."
+          />
+          <Row
+            path="%LOCALAPPDATA%\Warden\credentials.json"
+            what="Only exists if you enabled the cloud model. Holds the API key you supplied and nothing else. Deleting the file switches cloud mode off."
           />
         </div>
         <p className="mt-3 text-[13px] leading-relaxed text-ink-2">
@@ -54,10 +70,22 @@ export default function PrivacyPage() {
       <Section title="The AI model">
         <Prose>
           <p>
-            Warden&rsquo;s reasoning runs on a language model bundled with the download and
-            executed on your processor. Your machine&rsquo;s configuration is never sent to a
-            model provider, because there is no provider. No third-party AI service is
-            involved at any point.
+            By default, Warden&rsquo;s reasoning runs on a language model bundled with the
+            download and executed on your processor. In that mode your machine&rsquo;s
+            configuration is never sent to a model provider, because no provider is involved
+            at any point.
+          </p>
+          <p>
+            You can switch that for a hosted model, from the Model page inside the app, using
+            an API key you obtain yourself. Doing so is the only circumstance in which
+            anything Warden reads leaves your computer. It is off until you turn it on, the
+            app states what is sent before it asks for the key, and every diagnosis is
+            labelled with which model answered it.
+          </p>
+          <p>
+            Your key is stored in{" "}
+            <code>%LOCALAPPDATA%\Warden\credentials.json</code>, separately from your
+            settings, and no part of the application returns it once saved.
           </p>
         </Prose>
       </Section>

@@ -21,10 +21,12 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
         is useless in the exact situation it is for.
         <br />
         <br />
-        The one thing that does need a connection is fetching the AI model, once, if you
-        want it. Everything works before that using the built-in rules engine, and there is
-        an offline edition with the model already inside if the machine will never be
-        online.
+        Two things do need a connection, and neither is required. Fetching the local AI
+        model, once, if you want it, and there is an offline edition with it already inside
+        for a machine that will never be online. And the optional cloud model, which is off
+        until you enable it with your own API key and which, being hosted, is exactly no use
+        for the fault above. Warden falls back to the local model automatically when it
+        cannot be reached.
       </>
     ),
   },
@@ -32,9 +34,16 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
     q: "Does it send my data anywhere?",
     a: (
       <>
-        No. There is no account, no telemetry and no crash reporting, and the internal server
-        binds to <code className="font-mono text-[12px]">127.0.0.1</code> so it is not reachable
-        from your network at all.{" "}
+        Not by default, and not without you deciding to. There is no account, no telemetry
+        and no crash reporting, and the internal server binds to{" "}
+        <code className="font-mono text-[12px]">127.0.0.1</code> so it is not reachable from
+        your network at all.
+        <br />
+        <br />
+        The single exception is the cloud model, which is off on every install. Switch it on
+        with your own API key and Warden sends that provider the symptom and the readings
+        behind it when it answers a diagnosis. Not your files, not your browsing, and nothing
+        Warden has not itself measured.{" "}
         <Link href="/security" className="text-series-1 hover:underline">
           More on the security page
         </Link>
@@ -120,9 +129,11 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
     q: "Will it slow my computer down?",
     a: (
       <>
-        The monitoring is light, and samples a handful of Windows APIs on a timer. The AI model
-        only loads when there is something to reason about, and it will use your processor
-        properly for those ten or twenty seconds. It is idle the rest of the time.
+        The monitoring is light, and samples a handful of Windows APIs on a timer. The local
+        AI model only loads when there is something to reason about, and it will use your
+        processor properly for those ten or twenty seconds. It is idle the rest of the time.
+        The cloud model, if you enable it, uses none of your processor at all and answers in
+        two to four seconds instead.
       </>
     ),
   },

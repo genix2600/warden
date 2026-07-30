@@ -22,7 +22,7 @@ function Hero() {
       <div aria-hidden className="plane-grid absolute inset-0" />
       <div className="relative mx-auto max-w-4xl px-5 pb-20 pt-20 text-center sm:pt-28">
         <p className="rise text-[12px] font-semibold uppercase tracking-[0.18em] text-series-1">
-          Windows 10 &amp; 11 · runs entirely offline
+          Windows 10 &amp; 11 · works offline by default
         </p>
 
         <h1 className="mt-5 text-[40px] font-bold leading-[1.08] tracking-tight text-ink sm:text-[62px]">
@@ -52,8 +52,8 @@ function Hero() {
           </Link>
         </div>
         <p className="rise mt-3 text-[12px] text-muted">
-          Free · {INSTALLER_SIZE} · the AI runs on your machine, so nothing you look at
-          leaves it
+          Free · {INSTALLER_SIZE} · the AI runs on your machine unless you choose
+          otherwise, and Warden always says which one answered
         </p>
 
         <div className="mt-16 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -122,7 +122,7 @@ function Loop() {
     {
       n: "02",
       title: "Reasons",
-      body: "A local AI model, running on your machine, picks the most likely cause from what was actually measured. No internet, no account, no key.",
+      body: "A model picks the most likely cause from what was actually measured. On your own processor by default: no internet, no account, no key. You can add your own cloud key for a stronger one, and Warden says which answered.",
     },
     {
       n: "03",

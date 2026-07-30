@@ -2,7 +2,7 @@
 
 **An agentic Windows diagnostician that reads your machine, shows you the evidence, and runs nothing without your say-so.**
 
-`v1.0.0` · Windows 10 and 11, x64 · 245 tests · runs entirely on your own machine
+`v1.0.0` · Windows 10 and 11, x64 · 289 tests · runs on your own machine by default
 
 [Website](https://warden-genix2600s-projects.vercel.app) · [Download](https://github.com/genix2600/warden/releases/latest) · [Architecture](ARCHITECTURE.md) · [Measurements](docs/calibration.md)
 
@@ -49,11 +49,18 @@ command you can run yourself to get the same answer.
 
 ### It cannot invent a command
 
-The reasoning model never writes shell. It chooses an id from a closed registry of
+The local model never writes shell. It chooses an id from a closed registry of
 17 reviewed actions and supplies parameters, which are checked against a schema
 and against reality before anyone is asked to approve them. Warden will not
 connect you to a network it has never seen this machine use, or restart a device
 that is not in the device tree.
+
+The optional cloud model *may* write one, because seventeen actions cannot cover
+an arbitrary Windows fault and pretending otherwise was the honest limit of the
+first design. That path is quarantined rather than merged: a written command is
+screened against a refusal list before you are shown it, runs as an argument
+list with no shell, takes a restore point first, and is labelled in the
+interface as written-by-the-model rather than reviewed. See **Two brains**.
 
 ### Watching is automatic, interrupting is not
 
@@ -99,12 +106,28 @@ upstream internet fault, a worn-out battery and a failing drive. For those there
 no command in the candidate set to choose, so no amount of model confidence can
 produce one. A build-time check fails if any symptom is left unmapped.
 
-### It works with the network down
+### Two brains, and it always says which one answered
 
-The model runs locally. This is a functional requirement before it is a privacy
-one, because a diagnostician that needs the internet to explain why you have no
-internet is useless in the situation it exists for. It also means this public
-repository contains no API key and has nowhere to put one.
+**Local, and the default.** Qwen2.5-1.5B on your own processor. Sends nothing
+anywhere, confined to the seventeen reviewed actions, and keeps working when the
+network is the thing that is broken. That last point is a functional requirement
+before it is a privacy one: a diagnostician that needs the internet to explain
+why you have no internet is useless in the situation it exists for. It is why
+the local path can never be removed and why the cloud path can never be
+required.
+
+**Cloud, off until you turn it on.** A hosted model reached with a key you fetch
+yourself. It knows the Windows command line properly and may write a command
+when none of the seventeen fit, which is the only reason to reach for it. It
+costs a round trip, needs a working connection, and sends the readings behind
+the problem to a third party. The Model page states that above the key field
+rather than below it.
+
+This repository contains no API key. It never will: it is public, so a key in it
+would be a key for everyone. If you supply one it is written to
+`credentials.json` in your own user folder, kept out of the settings model so
+the settings endpoint cannot return it, and shown back to you as four
+characters.
 
 ### It works without the model too
 
@@ -120,7 +143,7 @@ interface always says which one answered.
 |---|---|
 | Areas watched | 13, named the way a person would name them |
 | Problems detected | 25 |
-| Actions available | 17 (2 read-only, 9 reversible, 6 disruptive) |
+| Actions available | 17 reviewed (2 read-only, 9 reversible, 6 disruptive), plus composed commands in cloud mode |
 | Problems refused | 7, enforced by an empty candidate list |
 | Verification predicates | 14 |
 | Collectors | 14, sampling from every 2 seconds to every 120 |
@@ -160,9 +183,11 @@ it and run `Warden.exe` from inside the folder, keeping the folder together.
 | `%LOCALAPPDATA%\Warden\sessions` | One record per run, so a decision can be reopened later. Uninstall asks first. |
 | `%LOCALAPPDATA%\Warden\logs` | Plain-text log, the first place to look if something misbehaves. |
 | `%LOCALAPPDATA%\Warden\models` | The model, once you ask for it. |
-| `%LOCALAPPDATA%\Warden\settings.json` | Theme and behaviour. Holds no credentials by design. |
+| `%LOCALAPPDATA%\Warden\settings.json` | Theme, behaviour, muted findings. Holds no credentials. |
+| `%LOCALAPPDATA%\Warden\credentials.json` | Your cloud key, if you added one. Nothing else, and no API returns it. |
 
-Nothing is written outside your user folder, and nothing is transmitted anywhere.
+Nothing is written outside your user folder. Nothing is transmitted anywhere unless
+you turn on the cloud model, and then only the readings behind the problem.
 
 ### From source
 
@@ -196,11 +221,12 @@ connection. That one is roughly 967 MB.
 | Backend | Python 3.11, FastAPI, Pydantic v2 | Best Windows introspection surface available (WMI/CIM, PDH, pywin32, pythonnet). Pydantic gives typed contracts the front end is generated from. |
 | Desktop shell | pywebview on WebView2 | A real window at about 10 MB, reusing the browser engine Windows already ships. One runtime instead of Electron's two. |
 | Interface | React 18, TypeScript, Vite, Tailwind v4 | Types are generated from the backend's OpenAPI document, never written by hand. |
+| Cloud model (optional) | Groq, your own key, off by default | Reaches past the seventeen reviewed actions when nothing fits. Requires a connection, sends readings to a third party, and is labelled as such on every diagnosis. |
 | Local model | Qwen2.5-1.5B via a bundled Ollama | Schema-constrained JSON decoding, so the model cannot emit prose where an action id belongs. Small on purpose, for reasons below. |
 | System access | CIM and `Get-Net*` cmdlets over a persistent PowerShell host, `psutil`, `netsh`, ACPI/WMI, optional LibreHardwareMonitor via pythonnet | Locale-independent where it matters. |
 | Packaging | PyInstaller (onedir) and Inno Setup | A folder rather than a self-extracting binary, which starts faster and trips fewer antivirus heuristics. |
 | Website | Next.js, Tailwind v4, on Vercel | Nine static pages, no backend. |
-| Quality | pytest, mypy, ruff | 245 tests needing no Windows hardware. mypy clean across 74 modules, strict on `contracts/`. |
+| Quality | pytest, mypy, ruff | 289 tests needing no Windows hardware. mypy clean across 77 modules, strict on `contracts/`. |
 
 ### Why the model is small
 
@@ -319,7 +345,7 @@ ui/              React interface. src/generated/ is produced, not written.
 site/            The website. Vercel Root Directory must be set to site.
 installer/       Inno Setup definition.
 scripts/         Build, icon generation, model staging, schema export.
-tests/           245 tests, none of which need Windows-specific hardware.
+tests/           289 tests, none of which need Windows-specific hardware.
 docs/            The calibration measurements behind every threshold.
 ```
 
@@ -342,8 +368,8 @@ and the full list of what Warden refuses to attempt.
 ```powershell
 python -m warden --headless --port 8099   # backend only, API docs at /docs
 cd ui; npm run dev                        # interface with hot reload
-python -m pytest                          # 245 tests, about 3 seconds
-python -m mypy warden                     # 74 modules, strict on contracts/
+python -m pytest                          # 289 tests, about 3 seconds
+python -m mypy warden                     # 77 modules, strict on contracts/
 python -m ruff check .; python -m ruff format .
 cd ui; npm run gen:types                  # regenerate TS types from contracts
 ```
@@ -376,6 +402,14 @@ meaningful cross-platform version of it.
 **Seventeen actions.** The registry is small on purpose. Every entry is
 reviewed, grounded against observed reality, and verifiable. Breadth would cost
 the guarantees that make the rest defensible.
+
+**A command the cloud model writes carries a weaker guarantee.** The seventeen
+reviewed actions are grounded against readings actually taken from your machine
+and verified afterwards by a predicate declared before you approve. A composed
+command has neither: it is screened against a refusal list, shown to you exactly
+as it will run, and that is the whole of it. Warden reports the exit code and the
+output and does not claim the problem is fixed, because it has measured nothing.
+The interface uses a different card for it for exactly this reason.
 
 **Seven of the nine audit checks report without acting.** A check earns a fix
 button only if the change can be undone and the quantity re-read afterwards.

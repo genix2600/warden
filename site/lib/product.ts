@@ -37,7 +37,7 @@ export const STATS = [
   { value: 13, label: "areas watched", suffix: "" },
   { value: 17, label: "actions it can take", suffix: "" },
   { value: 7, label: "problems it refuses to fix", suffix: "" },
-  { value: 0, label: "data sent anywhere", suffix: " bytes" },
+  { value: 0, label: "sent anywhere, unless you turn on cloud mode", suffix: " bytes" },
 ] as const;
 
 export interface Domain {

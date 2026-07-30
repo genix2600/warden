@@ -169,17 +169,42 @@ Also excluded, each on purpose:
 
 ---
 
-## Why the model is local
+## Why the model is local by default
 
 [`warden/reasoner/llm.py`](warden/reasoner/llm.py) talks to Ollama on
-`127.0.0.1`. This is a functional requirement before it is a privacy one: **a
-cloud model cannot help you fix a network that is down.** It also means there is
-no API key anywhere in this repository, and nowhere for one to be added — a
-property of the design rather than a policy.
+`127.0.0.1`, and that stays the default for a functional reason before a privacy
+one: **a cloud model cannot help you fix a network that is down.** Adding a cloud
+option changes nothing about that, which is exactly why the local path cannot be
+removed and the cloud path cannot be required.
+
+What a cloud option does change is reach. Seventeen reviewed actions cannot
+repair an arbitrary Windows fault, and pretending otherwise was the honest limit
+of the first design rather than a feature of it. So
+[`warden/reasoner/cloud.py`](warden/reasoner/cloud.py) may return a command the
+model wrote.
+
+That command does not go through
+[`executor/runner.py`](warden/executor/runner.py), whose safety comes entirely
+from re-deriving the argv out of the registry and comparing — a check that has
+nothing to compare against here. It goes through
+[`executor/freeform.py`](warden/executor/freeform.py), which substitutes a
+different set of gates: a refusal list checked *before* the user is shown a
+button, argv-only with no shell, a restore point on every run rather than once
+per session, and the same keyword-only `approved_at`. The interface renders the
+two with different components on purpose, because the guarantees differ and a
+user who cannot tell them apart at a glance has been misled by us rather than by
+the model.
+
+There is no API key in this repository and there never will be, since it is
+public. A key the user supplies lives in `credentials.json`, deliberately outside
+`Settings` so that `GET /api/settings` — which serialises that model verbatim —
+cannot return it.
 
 If no model is present, [`warden/reasoner/rules.py`](warden/reasoner/rules.py)
-produces the same `Diagnosis` type through deterministic rules, and the interface
-says which one answered. Warden degrades, visibly, rather than failing.
+produces the same `Diagnosis` type through deterministic rules. Three brains,
+tried cloud → local → rules, each step down a strict loss of capability and a
+strict gain in reliability, and the interface says which one answered. Warden
+degrades, visibly, rather than failing.
 
 ---
 

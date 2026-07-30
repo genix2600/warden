@@ -5,18 +5,18 @@ import { REPO } from "@/lib/product";
 export const metadata: Metadata = {
   title: "Security & privacy",
   description:
-    "Warden runs entirely on your machine. No account, no telemetry, no API keys, and a "
-    + "closed list of commands it is able to run.",
+    "Warden runs on your machine by default. No account, no telemetry, no key ships "
+    + "with it, and a closed list of commands it is able to run.",
 };
 
 export default function SecurityPage() {
   return (
     <PageShell
       eyebrow="Security & privacy"
-      title="It reads a lot about your computer. None of it leaves."
-      lead="Warden looks at your event log, your device inventory, your network configuration and your installed services. That is a great deal of trust to ask for, so here is exactly what happens to it."
+      title="It reads a lot about your computer. None of it leaves unless you say so."
+      lead="Warden looks at your event log, your device inventory, your network configuration and your installed services. That is a great deal of trust to ask for, so here is exactly what happens to it, including the one case where some of it is sent somewhere."
     >
-      <Section title="Nothing is transmitted">
+      <Section title="Nothing is transmitted unless you turn on the cloud model">
         <div className="grid gap-2.5 sm:grid-cols-2">
           <Fact
             title="No account"
@@ -27,8 +27,8 @@ export default function SecurityPage() {
             body="No usage analytics, no crash reporting, no 'anonymous' statistics. There is no code in the project that sends anything outward."
           />
           <Fact
-            title="No API keys"
-            body="The repository is public and contains no credentials, and has nowhere to put one, because the model is local. That is a property of the design, not a policy someone has to remember."
+            title="No key ships with it"
+            body="The repository is public and contains no credentials, and never will, because a key in a public repository is a key for everybody. If you add your own it stays in your user folder and no endpoint returns it."
           />
           <Fact
             title="Loopback only"
@@ -37,7 +37,7 @@ export default function SecurityPage() {
         </div>
       </Section>
 
-      <Callout title="The model is local because it has to be">
+      <Callout title="The default model is local because it has to be">
         <p>
           Warden reasons with a language model that runs on your processor. That is a
           functional requirement before it is a privacy one:{" "}
@@ -48,7 +48,52 @@ export default function SecurityPage() {
           The privacy consequence, that your machine&rsquo;s configuration never leaves it,
           comes free with getting the engineering right.
         </p>
+        <p className="mt-2">
+          That argument is why the local model cannot be removed and why the cloud one
+          cannot be required. It is not a reason to pretend the cloud option does not
+          exist, so the next section says exactly what it does.
+        </p>
       </Callout>
+
+      <Section
+        title="The one thing that does send data, and only if you switch it on"
+        blurb="Seventeen reviewed actions cannot repair an arbitrary Windows fault. The cloud model is how Warden reaches past them, and it costs something real."
+      >
+        <Prose>
+          <p>
+            Cloud mode is off on every install. Turning it on requires a Groq API key you
+            fetch yourself, pasted into the Model page inside the app. Warden does not
+            ship a key, does not proxy through a server of ours, and there is no server
+            of ours.
+          </p>
+          <p>
+            <strong className="text-ink">What is sent, when it answers:</strong> the
+            symptom, the readings the collectors took that are relevant to it, your
+            Windows version and architecture, and the list of actions it may choose
+            from.
+          </p>
+          <p>
+            <strong className="text-ink">What is never sent:</strong> your files, your
+            browsing, your account names, your product key, anything typed into any
+            other application, and anything Warden has not itself measured.
+          </p>
+          <p>
+            With cloud mode on, the model is allowed to write a command rather than pick
+            one from the seventeen. Those are labelled as written-by-the-model everywhere
+            they appear, are checked against a refusal list before you are shown them,
+            still run as an argument list with no shell, and still take a restore point
+            first. It is a weaker guarantee than the reviewed list makes, and the app
+            says so on the card rather than in a footnote.
+          </p>
+          <p>
+            Your key is written to{" "}
+            <code>%LOCALAPPDATA%\Warden\credentials.json</code>, in its own file rather
+            than with your settings, because the settings endpoint returns everything in
+            it. No endpoint returns the key. The app shows you four characters of it.
+            Removing it deletes the file.
+          </p>
+        </Prose>
+      </Section>
 
       <Section
         title="What it is capable of doing"
@@ -56,7 +101,7 @@ export default function SecurityPage() {
       >
         <Prose>
           <p>
-            Warden can run seventeen commands. Not seventeen kinds of command: seventeen specific
+            Warden can run seventeen reviewed commands. Not seventeen kinds of command: seventeen specific
             ones, written by hand, sitting in the source where you can read them before you
             install anything. The AI selects from that list; it cannot compose, extend or edit
             it.

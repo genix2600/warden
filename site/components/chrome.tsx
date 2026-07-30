@@ -132,8 +132,9 @@ export function Footer() {
         </div>
 
         <p className="mt-8 border-t border-hairline pt-5 text-[11px] leading-relaxed text-muted">
-          Warden is a student project built for the ShriTeq 2026 hackathon. It runs entirely
-          on your machine and sends nothing anywhere. Windows 10 and 11, x64.
+          Warden is a student project built for the ShriTeq 2026 hackathon. It runs on your
+          machine and sends nothing anywhere unless you switch on the optional cloud
+          model. Windows 10 and 11, x64.
         </p>
       </div>
     </footer>
