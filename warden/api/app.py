@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from typing import Any
@@ -33,7 +34,7 @@ from warden.orchestrator import Agent, SessionRecorder
 from warden.paths import resource_path
 from warden.playbooks import CANDIDATES, REGISTRY
 from warden.reasoner.llm import DEFAULT_MODEL
-from warden.winenv import describe_host, is_admin, is_frozen
+from warden.winenv import describe_host, is_admin, is_frozen, relaunch_elevated
 
 log = logging.getLogger(__name__)
 
@@ -56,6 +57,35 @@ class DoctorCheck(BaseModel):
 class DoctorReport(BaseModel):
     ready: bool
     checks: list[DoctorCheck]
+
+
+class RelaunchResponse(BaseModel):
+    started: bool
+    detail: str
+
+
+def _shutdown_this_instance() -> None:
+    """Close the window and the process, so the elevated copy is the only one.
+
+    The window owns the main thread and uvicorn is a daemon behind it, so
+    closing the window is what actually ends the process -- and the ``finally``
+    in ``__main__.main`` is what reaps the model runtime. Falling back to a hard
+    exit matters for ``--headless``, where there is no window to close.
+    """
+    windows = []
+    with suppress(Exception):
+        import webview
+
+        windows = list(webview.windows)
+
+    if windows:
+        for window in windows:
+            with suppress(Exception):
+                window.destroy()
+        return
+    # Headless: no window to close, so end the process directly. The model
+    # runtime is a child and goes with it.
+    os._exit(0)
 
 
 class CapabilityReport(BaseModel):
@@ -196,6 +226,37 @@ def _routes(agent: Agent, harness: DemoHarness) -> APIRouter:
             raise HTTPException(404, str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
+
+    @router.post("/relaunch-elevated", response_model=RelaunchResponse)
+    async def relaunch() -> RelaunchResponse:
+        """Start an elevated copy of Warden and stand this one down.
+
+        Only reachable when the user asks for it, from the point in the
+        interface where they met the limit. Declining the UAC prompt is a valid
+        answer and leaves this instance running untouched.
+        """
+        if is_admin():
+            return RelaunchResponse(
+                started=False, detail="Warden is already running as administrator."
+            )
+        started = await asyncio.to_thread(relaunch_elevated)
+        if not started:
+            return RelaunchResponse(
+                started=False,
+                detail=(
+                    "Warden was not restarted. If you chose No on the Windows prompt "
+                    "that is fine — nothing has changed, and everything that does not "
+                    "need administrator still works."
+                ),
+            )
+        # The elevated copy is starting. Hand over rather than run alongside it:
+        # two instances would mean two model runtimes, each holding a gigabyte,
+        # and two agents proposing fixes for the same machine.
+        asyncio.get_running_loop().call_later(0.5, _shutdown_this_instance)
+        return RelaunchResponse(
+            started=True,
+            detail="Warden is restarting with administrator rights. This window will close.",
+        )
 
     @router.get("/doctor", response_model=DoctorReport)
     async def doctor() -> DoctorReport:

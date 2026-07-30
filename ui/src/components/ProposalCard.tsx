@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ActionProposal } from "../types";
 import { renderArgv, riskLabel } from "../lib/format";
+import { ElevateButton } from "./ElevateButton";
 import { Pill } from "./StatusDot";
 
 /**
@@ -18,11 +19,13 @@ export function ProposalCard({
   onApprove,
   onDecline,
   busy,
+  elevated,
 }: {
   proposal: ActionProposal;
   onApprove: () => void;
   onDecline: () => void;
   busy: boolean;
+  elevated: boolean;
 }) {
   const [error, setError] = useState<string | null>(null);
 
@@ -80,6 +83,20 @@ export function ProposalCard({
           <Label>Why this action</Label>
           <p className="mt-1 text-[13px] leading-relaxed text-ink-2">{proposal.rationale}</p>
         </div>
+
+        {/* The executor would refuse this after approval, which is a dead end
+            the user can do nothing with. Say it before they commit, and put the
+            remedy next to the sentence. */}
+        {proposal.requires_admin && !elevated && (
+          <div className="rounded-lg border border-warning/40 bg-warning/5 p-3">
+            <p className="text-[12px] leading-relaxed text-ink-2">
+              This fix needs administrator rights, and Warden is running as a standard
+              user. Everything else on this page still works — restart elevated and the
+              same proposal will be waiting.
+            </p>
+            <ElevateButton compact />
+          </div>
+        )}
 
         {error && (
           <p className="rounded border border-critical/40 bg-critical/10 p-2.5 text-[12px] text-critical">

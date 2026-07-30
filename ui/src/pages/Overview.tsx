@@ -14,6 +14,7 @@ interface Props {
   onDecline: (id: string) => Promise<void>;
   onSeeHealth: () => void;
   busy: boolean;
+  elevated: boolean;
 }
 
 /**
@@ -32,6 +33,7 @@ export function Overview({
   onDecline,
   onSeeHealth,
   busy,
+  elevated,
 }: Props) {
   const monitoring = state.snapshot?.monitoring ?? false;
   const waiting = focus?.state === "awaiting_approval";
@@ -71,6 +73,7 @@ export function Overview({
           onApprove={onApprove}
           onDecline={onDecline}
           busy={busy}
+          elevated={elevated}
         />
         <div className="hidden min-h-0 2xl:block">
           <AgentLog lines={log} />

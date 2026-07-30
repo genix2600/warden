@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { AgentSnapshot, DoctorReport } from "../types";
+import { ElevateButton } from "../components/ElevateButton";
 import { Icon } from "../components/Icon";
 import { PageHeader } from "../components/PageHeader";
 import { StatusDot } from "../components/StatusDot";
@@ -138,6 +139,10 @@ function Group({
             <div className="min-w-0 flex-1">
               <h3 className="text-[13px] font-medium text-ink">{check.name}</h3>
               <p className="mt-0.5 text-[12px] leading-relaxed text-ink-2">{check.detail}</p>
+              {/* The one check with a one-click remedy. Offered here rather than
+                  demanded at launch, so Warden still runs on a machine where
+                  the user is not an administrator. */}
+              {!check.ok && check.name === "Administrator" && <ElevateButton />}
             </div>
             {check.ok && (
               <span className="mt-0.5 shrink-0 text-good">

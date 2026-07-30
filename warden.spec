@@ -70,12 +70,12 @@ exe = EXE(
     console=False,
     disable_windowed_traceback=False,
     upx=False,  # UPX-packed binaries are themselves an antivirus heuristic.
-    # Ask for elevation at launch, once. Most of the registry needs it, and
-    # without this the same build behaves differently depending on how the user
-    # happened to start it -- an admin-gated fix silently becomes a privilege
-    # refusal. Windows cannot elevate a process after it has started, so the
-    # choice is here or nowhere.
-    uac_admin=True,
+    # Deliberately *not* uac_admin. Requiring elevation to start would make
+    # Warden unrunnable on a managed laptop where the user is not an
+    # administrator -- and the machines most likely to have something quietly
+    # misconfigured are exactly the managed ones. It runs for everyone, reports
+    # honestly which actions it cannot perform, and offers to restart itself
+    # elevated at the point the user hits that wall. See warden/winenv.py.
 )
 
 coll = COLLECT(

@@ -12,6 +12,7 @@ interface Props {
   onApprove: (id: string) => Promise<void>;
   onDecline: (id: string) => Promise<void>;
   busy: boolean;
+  elevated: boolean;
 }
 
 const STEPS = ["diagnosing", "awaiting_approval", "executing", "verifying"] as const;
@@ -25,6 +26,7 @@ export function IncidentStage({
   onApprove,
   onDecline,
   busy,
+  elevated,
 }: Props) {
   if (!incident) return <Idle monitoring={monitoring} />;
 
@@ -145,6 +147,7 @@ export function IncidentStage({
               busy={busy}
               onApprove={() => onApprove(incident.id)}
               onDecline={() => onDecline(incident.id)}
+              elevated={elevated}
             />
           )}
 

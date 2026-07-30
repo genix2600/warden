@@ -37,6 +37,55 @@ def is_admin() -> bool:
         return False
 
 
+#: ShellExecute returns a value above this on success. Below it, the number is
+#: an error code -- and the one that matters is 1223, ERROR_CANCELLED, which is
+#: the user clicking No on the UAC prompt. That is a decision, not a failure.
+_SHELL_EXECUTE_SUCCESS = 32
+_ERROR_CANCELLED = 1223
+_SW_SHOWNORMAL = 1
+
+
+def relaunch_elevated() -> bool:
+    """Start a second, elevated copy of Warden. Returns False if declined.
+
+    Windows cannot elevate a process that is already running -- the token is
+    fixed at creation -- so "run as administrator" always means starting again.
+    The caller is responsible for shutting the current instance down once this
+    returns True, or the user ends up with two Wardens and two model runtimes
+    competing for the same gigabyte of weights.
+
+    Warden does not force elevation at launch. A managed laptop where the user
+    is not an administrator is precisely the kind of machine most likely to have
+    something quietly misconfigured, and refusing to start on it would be the
+    wrong trade. Instead this is offered at the point the user actually meets
+    the limit, with the specific action that needs it named.
+    """
+    if not is_windows() or is_admin():
+        return False
+
+    if is_frozen():
+        target, parameters = sys.executable, ""
+    else:
+        # From a source checkout the executable is the interpreter, so the
+        # module has to be named explicitly or the elevated copy starts a REPL.
+        target, parameters = sys.executable, "-m warden"
+
+    try:
+        result = ctypes.windll.shell32.ShellExecuteW(
+            None, "runas", target, parameters or None, None, _SW_SHOWNORMAL
+        )
+    except (AttributeError, OSError):
+        return False
+
+    if int(result) > _SHELL_EXECUTE_SUCCESS:
+        return True
+    if int(result) == _ERROR_CANCELLED:
+        # Declining is a legitimate answer. Nothing happens, the current
+        # instance keeps running, and the user is told nothing alarming.
+        return False
+    return False
+
+
 #: Windows 11 reports itself as Windows 10 through every documented API; the
 #: build number is the only thing that distinguishes them. 22000 is the first
 #: Windows 11 build.

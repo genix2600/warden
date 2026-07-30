@@ -71,6 +71,7 @@ export default function App() {
               onDecline={(id) => decide(id, "decline")}
               onSeeHealth={() => setPage("health")}
               busy={busy}
+              elevated={state.snapshot?.elevated ?? false}
             />
           )}
           {page === "health" && (
