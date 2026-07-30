@@ -40,3 +40,8 @@ settings.json
 # OS
 Thumbs.db
 desktop.ini
+
+# Internal brief for the team, written against a specific build. Deliberately
+# not published: it contains presentation notes and candid limitations meant
+# for us rather than for anyone evaluating the product.
+WARDEN-TEAM-BRIEF.txt
