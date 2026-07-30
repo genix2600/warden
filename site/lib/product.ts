@@ -29,7 +29,7 @@ export const ZIP_URL = `${REPO}/releases/latest/download/Warden-${VERSION}.zip`;
 export const OFFLINE_AVAILABLE = false;
 export const OFFLINE_URL = `${REPO}/releases/latest/download/Warden-Setup-${VERSION}-offline.exe`;
 
-export const INSTALLER_SIZE = "46 MB";
+export const INSTALLER_SIZE = "45 MB";
 export const OFFLINE_SIZE = "967 MB";
 export const MODEL_SIZE = "1 GB";
 
