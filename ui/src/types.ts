@@ -35,6 +35,8 @@ export type CheckStarted = S["CheckStarted"];
 export type CheckResult = S["CheckResult"];
 export type CheckStatus = S["CheckStatus"];
 export type Recommendation = S["Recommendation"];
+export type AuditApplied = S["AuditApplied"];
+export type IntentChoice = S["IntentChoice"];
 
 export type TelemetryEvent = S["TelemetryEvent"];
 export type AgentLogEvent = S["AgentLogEvent"];

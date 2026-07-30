@@ -1,6 +1,7 @@
 /** Thin fetch helpers. The API is on the same origin the shell loaded from. */
 import type {
   AgentSnapshot,
+  AuditApplied,
   AuditReport,
   CheckStarted,
   Settings,
@@ -40,6 +41,11 @@ export const api = {
   // Diagnosis is on request. Omit the domain to check everything.
   check: (domain?: string) =>
     json<CheckStarted>(`/api/check${domain ? `?domain=${domain}` : ""}`, { method: "POST" }),
+  applyTuneup: (checkId: string, revert = false) =>
+    json<AuditApplied>(
+      `/api/audit/apply?check_id=${encodeURIComponent(checkId)}&revert=${revert}`,
+      { method: "POST" },
+    ),
   settings: () => json<Settings>("/api/settings"),
   saveSettings: (next: Settings) =>
     json<Settings>("/api/settings", { method: "PUT", body: JSON.stringify(next) }),

@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { checkLabel, checkTone, toneClass } from "../lib/format";
-import type { AuditReport, CheckResult, CheckStatus } from "../types";
+import { checkLabel, checkTone, renderArgv, toneClass } from "../lib/format";
+import type {
+  AuditApplied,
+  AuditReport,
+  CheckResult,
+  CheckStatus,
+  Recommendation,
+} from "../types";
 import { Icon } from "../components/Icon";
 import { PageHeader } from "../components/PageHeader";
 import { StatusDot } from "../components/StatusDot";
@@ -15,16 +21,18 @@ import { BY_DOMAIN } from "../lib/domains";
  * measurable cost. Nothing here is failing, which is exactly why nobody has
  * found it.
  *
- * Two rules govern what may appear. Every finding names a quantity Warden can
- * read before and after -- enforced in the contracts, not here -- and nothing on
- * this page ever reaches out to interrupt. No banner, no sidebar badge, no
- * count on a surface the user did not navigate to. A tool that nags about
- * settings is the thing this feature was written not to be.
+ * Three rules govern what appears. Every finding names a quantity Warden can
+ * read before and after, enforced in the contracts rather than here. Every fix
+ * has to be undoable, which is why the obvious one (deleting temporary files) is
+ * absent. And nothing on this page ever reaches out to interrupt: no banner, no
+ * sidebar badge, no count on a surface the user did not navigate to.
  */
 export function TuneUp() {
   const [report, setReport] = useState<AuditReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [working, setWorking] = useState<string | null>(null);
+  const [outcomes, setOutcomes] = useState<Record<string, AuditApplied>>({});
 
   const run = useCallback(async () => {
     setBusy(true);
@@ -37,6 +45,29 @@ export function TuneUp() {
       setBusy(false);
     }
   }, []);
+
+  const applyOne = useCallback(
+    async (checkId: string, revert: boolean) => {
+      setWorking(checkId);
+      try {
+        const result = await api.applyTuneup(checkId, revert);
+        setOutcomes((current) => ({ ...current, [checkId]: result }));
+      } catch (problem) {
+        setOutcomes((current) => ({
+          ...current,
+          [checkId]: {
+            ok: false,
+            detail: problem instanceof Error ? problem.message : String(problem),
+            change: "",
+            reverted: revert,
+          },
+        }));
+      } finally {
+        setWorking(null);
+      }
+    },
+    [],
+  );
 
   // On open, and on request. Deliberately not on a timer.
   useEffect(() => {
@@ -55,6 +86,9 @@ export function TuneUp() {
   const worth = results.filter((r) => r.status === "suboptimal");
   const depends = results.filter((r) => r.status === "intent_dependent");
   const settled = results.filter((r) => r.status === "optimal");
+  const byCheck: Record<string, Recommendation> = Object.fromEntries(
+    (report?.recommendations ?? []).map((r) => [r.result.check_id, r]),
+  );
 
   return (
     <div className="scroll-y h-full px-6 py-5">
@@ -83,15 +117,23 @@ export function TuneUp() {
 
       <div className="space-y-2.5">
         {sorted.map((result) => (
-          <Finding key={result.check_id} result={result} />
+          <Finding
+            key={result.check_id}
+            result={result}
+            recommendation={byCheck[result.check_id]}
+            onApply={(id, revert) => void applyOne(id, revert)}
+            busy={working === result.check_id}
+            outcome={outcomes[result.check_id]}
+          />
         ))}
       </div>
 
       {report && (
         <p className="mt-6 max-w-2xl border-t border-hairline pt-4 text-[12px] leading-relaxed text-muted">
-          Warden only lists a setting when it can measure what changes. If it cannot tell
-          you the number, it does not tell you to change it. That is why there is no
-          registry cleaning here, and no button promising a percentage.
+          Warden only lists a setting when it can measure what changes, and only
+          offers to change one when it can put it back. That is why there is no
+          registry cleaning here, no button promising a percentage, and no
+          one-click delete of your temporary files.
         </p>
       )}
     </div>
@@ -117,10 +159,24 @@ function summary(
   return `${parts.join(", ")}.`;
 }
 
-function Finding({ result }: { result: CheckResult }) {
+function Finding({
+  result,
+  recommendation,
+  onApply,
+  busy,
+  outcome,
+}: {
+  result: CheckResult;
+  recommendation?: Recommendation;
+  onApply: (checkId: string, revert: boolean) => void;
+  busy: boolean;
+  outcome?: AuditApplied;
+}) {
   const tone = checkTone(result.status);
   const attention = result.status === "suboptimal";
   const domain = BY_DOMAIN[result.domain_id];
+  const proposal = recommendation?.proposal ?? null;
+  const choices = recommendation?.choices ?? [];
 
   return (
     <article
@@ -149,21 +205,78 @@ function Finding({ result }: { result: CheckResult }) {
 
       {(result.observed !== null || result.expected !== null) && (
         <dl className="mt-3 flex flex-wrap gap-x-8 gap-y-1.5 border-t border-hairline pt-2.5">
-          {result.observed !== null && (
-            <Pair label="Now" value={String(result.observed)} />
-          )}
+          {result.observed !== null && <Pair label="Now" value={String(result.observed)} />}
           {result.expected !== null && (
             <Pair label="Would become" value={String(result.expected)} accent />
           )}
         </dl>
       )}
 
-      {attention && (
-        <p className="mt-3 rounded-lg bg-sunken px-3 py-2 text-[11px] leading-relaxed text-muted">
-          Warden is not offering to change this yet. It reports what it measured; applying
-          settings from this page comes with the same approval card, evidence and
-          verification as everything else, and is not finished.
-        </p>
+      {/* A question with no correct answer. Both costs, and no recommendation,
+          because Warden cannot know which one this person wants. */}
+      {choices.length > 0 && (
+        <div className="mt-3 grid gap-2 border-t border-hairline pt-3 sm:grid-cols-2">
+          {choices.map((choice) => (
+            <div key={choice.id} className="rounded-lg bg-sunken px-3 py-2.5">
+              <h4 className="text-[12px] font-semibold text-ink">{choice.label}</h4>
+              <p className="mt-0.5 text-[11px] leading-snug text-muted">{choice.cost}</p>
+            </div>
+          ))}
+          <p className="text-[11px] leading-relaxed text-muted sm:col-span-2">
+            Warden has no way to tell which of these you want, so it is not
+            recommending either.
+          </p>
+        </div>
+      )}
+
+      {proposal && !outcome && (
+        <div className="mt-3 border-t border-hairline pt-3">
+          <p className="mb-2 text-[11px] leading-relaxed text-muted">
+            Expected: {recommendation?.expected_improvement}
+          </p>
+          <code className="block overflow-x-auto rounded-lg bg-sunken p-2.5 font-mono text-[11px] leading-relaxed text-ink-2">
+            <span className="text-muted">&gt; </span>
+            {renderArgv(proposal.rendered_argv)}
+          </code>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onApply(result.check_id, false)}
+              className="rounded-lg bg-series-1 px-3.5 py-1.5 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {busy ? "Applying…" : "Apply this"}
+            </button>
+            {recommendation?.revert && (
+              <span className="text-[11px] text-muted">{recommendation.revert.describe}</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {outcome && (
+        <div className="mt-3 rounded-lg border border-hairline bg-sunken p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusDot tone={outcome.ok ? "good" : "critical"} />
+            <span className="text-[12px] font-medium text-ink">{outcome.detail}</span>
+            {outcome.ok && !outcome.reverted && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onApply(result.check_id, true)}
+                className="ml-auto rounded-lg border border-hairline px-2.5 py-1 text-[11px] text-ink-2 transition-colors hover:bg-raised hover:text-ink disabled:opacity-50"
+              >
+                Undo this
+              </button>
+            )}
+          </div>
+          {/* Shown whichever way it went. An audit that always reports an
+              improvement is indistinguishable from the tools this one exists
+              to replace. */}
+          {outcome.change && (
+            <p className="mt-1.5 text-[12px] leading-relaxed text-ink-2">{outcome.change}</p>
+          )}
+        </div>
       )}
     </article>
   );
