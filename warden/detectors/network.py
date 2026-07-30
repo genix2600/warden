@@ -82,6 +82,23 @@ class WifiLinkDetector(Detector):
                 )
             ]
 
+        # An unreadable link is not a disconnected one. `netsh` needs Location
+        # services on Windows 11 and says nothing useful without it, and a
+        # detector that treats "we could not look" as "it is down" produces a
+        # critical fault on a perfectly healthy machine -- which it did.
+        if str(link_value.get("state") or "").lower() == "unknown":
+            return []
+
+        # Warden's own other readings can settle this. If packets are reaching
+        # the gateway over the Wi-Fi interface, the adapter is associated,
+        # whatever netsh managed to say. Believing the weaker source over the
+        # stronger one is how a contradiction reaches the screen.
+        gateway = store.value("net.connectivity.gateway")
+        if isinstance(gateway, dict) and gateway.get("reachable"):
+            via = str(gateway.get("via") or "").lower()
+            if "wi-fi" in via or "wifi" in via or "wireless" in via:
+                return []
+
         samples = _stable(store, "net.wifi.link", lambda v: (v or {}).get("state") != "connected")
         if not samples:
             return []

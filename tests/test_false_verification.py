@@ -18,7 +18,7 @@ import pytest
 
 from tests.conftest import make_observation
 from warden.collectors import CollectorHost
-from warden.collectors.network import parse_wlan_interfaces
+from warden.collectors.network import parse_wlan_interfaces, wlan_access_denied
 from warden.contracts import (
     ExecutionOutcome,
     ExecutionRecord,
@@ -383,3 +383,96 @@ class TestMuting:
         await agent.decline(incident.id)
 
         assert symptom.code not in agent.muted
+
+
+# ---------------------------------------------------------------------------
+# 4. A reading Windows refused to give is not a reading of "down"
+# ---------------------------------------------------------------------------
+
+#: Verbatim from a Windows 11 machine sitting on Wi-Fi at 433 Mbps, with
+#: Location services switched off. Every field the parser wants is absent.
+WLAN_PERMISSION_DENIED = """
+There is 1 interface on the system:
+Network shell commands need location permission to access WLAN information.
+Turn on Location services on the Location page in Privacy & security settings.
+
+Function WlanQueryInterface returns error 5:
+The requested operation requires elevation (Run as administrator).
+"""
+
+
+class TestWirelessDetailsWindowsWillNotDisclose:
+    """The worst bug of the lot: a healthy machine reported as broken.
+
+    `netsh wlan show interfaces` is gated behind Location services on Windows 11
+    and, without it, prints help text carrying no interface block. The collector
+    turned that silence into `state: "disconnected"` because the adapter was
+    present, so a machine connected at 433 Mbps -- with the gateway reachable
+    *via Wi-Fi* and internet up in the same tick -- was reported as down, and a
+    cloud model invented `netsh wlan connect` to repair it.
+    """
+
+    def test_the_refusal_is_recognised(self) -> None:
+        reason = wlan_access_denied(WLAN_PERMISSION_DENIED, "")
+        assert reason is not None
+        assert "Location" in reason
+
+    def test_ordinary_output_is_not_mistaken_for_a_refusal(self) -> None:
+        assert wlan_access_denied(RADIO_FULLY_ON, "") is None
+
+    def test_the_refusal_yields_no_interface_block(self) -> None:
+        """Which is what made the invented state reachable in the first place."""
+        assert parse_wlan_interfaces(WLAN_PERMISSION_DENIED) == []
+
+    def test_an_unknown_link_raises_nothing(self, connected_store: ObservationStore) -> None:
+        for _ in range(3):
+            connected_store.ingest(
+                [
+                    make_observation(
+                        "net.wifi.link",
+                        {"state": "unknown", "ssid": None, "radio": "on", "interface": None},
+                    )
+                ]
+            )
+        assert WifiLinkDetector().evaluate(connected_store) == []
+
+    def test_a_reachable_gateway_over_wifi_outranks_netsh(
+        self, connected_store: ObservationStore
+    ) -> None:
+        """Warden's own stronger reading settles it. Packets moving through the
+        Wi-Fi interface mean the adapter is associated, whatever netsh said."""
+        for _ in range(3):
+            connected_store.ingest(
+                [
+                    make_observation(
+                        "net.wifi.link",
+                        {"state": "disconnected", "ssid": None, "radio": "on"},
+                    ),
+                    make_observation(
+                        "net.connectivity.gateway",
+                        {"address": "192.168.0.1", "reachable": True, "via": "Wi-Fi"},
+                    ),
+                ]
+            )
+        assert WifiLinkDetector().evaluate(connected_store) == []
+
+    def test_a_genuine_drop_is_still_reported(
+        self, connected_store: ObservationStore
+    ) -> None:
+        """The guards must not silence a real fault. Gateway unreachable, link
+        genuinely disconnected: that is still a symptom."""
+        for _ in range(3):
+            connected_store.ingest(
+                [
+                    make_observation(
+                        "net.wifi.link",
+                        {"state": "disconnected", "ssid": None, "radio": "on"},
+                    ),
+                    make_observation(
+                        "net.connectivity.gateway",
+                        {"address": "192.168.0.1", "reachable": False, "via": "Wi-Fi"},
+                    ),
+                ]
+            )
+        codes = [s.code for s in WifiLinkDetector().evaluate(connected_store)]
+        assert codes == ["NET.WIFI.DISCONNECTED"]

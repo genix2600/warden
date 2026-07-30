@@ -120,6 +120,38 @@ def parse_wlan_interfaces(text: str) -> list[dict[str, str]]:
     return [b for b in blocks if "state" in b or "radio status" in b]
 
 
+#: Phrases netsh prints when it will not disclose WLAN details.
+#:
+#: Windows 11 gates `netsh wlan show interfaces` behind Location Services, which
+#: is surprising, undocumented in the command's own help, and produces output
+#: that looks like a working reply until you read it. Matching on the error
+#: number as well as the prose keeps this working on a non-English install,
+#: where the sentences are translated but "error 5" is not.
+_WLAN_DENIED = (
+    "location permission",
+    "wlanqueryinterface returns error 5",
+    "requires elevation",
+)
+
+
+def wlan_access_denied(stdout: str, stderr: str) -> str | None:
+    """Why netsh refused to describe the wireless link, or None if it did.
+
+    Returned as a sentence a person can act on rather than a boolean, because
+    the remedy is not obvious and is not "restart something": it is a privacy
+    setting most people have never opened.
+    """
+    haystack = f"{stdout}\n{stderr}".lower()
+    if not any(needle in haystack for needle in _WLAN_DENIED):
+        return None
+    return (
+        "Windows will not tell Warden about the wireless link without Location "
+        "services, so the connection state below could not be read. This is a "
+        "permission, not a fault: turn on Settings > Privacy & security > "
+        "Location, or run Warden as administrator. Everything else about the "
+        "network is still being measured normally."
+    )
+
 def parse_wlan_profiles(text: str) -> list[str]:
     """Best-effort list of saved wireless profiles.
 
@@ -214,12 +246,29 @@ class WifiCollector(Collector):
         radio = iface.get("radio status") or ("on" if adapter_present else "unknown")
         signal = _percent(iface.get("signal"))
 
+        # netsh disclosed nothing. Say so, rather than inventing a state.
+        blocked = wlan_access_denied(completed.stdout, completed.stderr)
+        if blocked is not None:
+            result.errors.append(self.failure(script, RuntimeError(blocked)))
+
         result.observations.append(
             self.observation(
                 "net.wifi.link",
                 ObservationKind.STATE,
                 {
-                    "state": state or ("disconnected" if adapter_present else "no_adapter"),
+                    # "unknown", never "disconnected". An empty parse means netsh
+                    # told us nothing, and the commonest reason on Windows 11 is
+                    # a permission rather than a fault: without Location
+                    # Services, WlanQueryInterface returns error 5 and the
+                    # output carries no interface block at all.
+                    #
+                    # Turning that silence into "disconnected" reported a
+                    # machine connected at 433 Mbps as down, and sent a model
+                    # looking for a command to fix it. Absence is unknown here
+                    # exactly as it is everywhere else in this codebase.
+                    "state": state
+                    or ("unknown" if adapter_present else "no_adapter"),
+                    "unreadable": blocked,
                     "ssid": iface.get("ssid") or None,
                     "profile": (iface.get("profile") or "").strip() or None,
                     "band": iface.get("band"),
