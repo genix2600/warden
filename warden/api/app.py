@@ -221,6 +221,13 @@ def create_app(
         saved = settings.load()
         agent.autodiagnose = saved.autodiagnose
         agent.muted = set(saved.muted_symptoms)
+        # Restore cloud mode if a key was stored. Without this the key survived
+        # a restart and the mode did not, so Warden silently answered from the
+        # local model while the Model page showed a stored key -- the worst of
+        # both, since the user believes cloud is on and the header disagrees.
+        stored_key = credentials.load_key()
+        if stored_key:
+            agent.reasoner.set_cloud(GroqClient(api_key=stored_key))
         await agent.start()
         try:
             yield

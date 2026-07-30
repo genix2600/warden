@@ -16,6 +16,15 @@ from warden.contracts.symptoms import Symptom
 
 
 class ReasonerHealth(Contract):
+    """Which brain is standing by, for the always-visible header pill.
+
+    ``cloud_*`` is separate rather than overwriting ``model`` because the header
+    has to be able to say *which* of the three answered, and folding a cloud
+    model into the local fields would make the pill read "local model" for a
+    hosted one. That is the precise overstatement the interface exists not to
+    make, and it is on screen at all times.
+    """
+
     enabled: bool
     available: bool
     model: str | None = None
@@ -24,6 +33,13 @@ class ReasonerHealth(Contract):
         default="",
         description="Why the model is unavailable, in words a user can act on.",
     )
+    cloud_enabled: bool = Field(
+        default=False, description="Whether the user has switched the cloud model on."
+    )
+    cloud_available: bool = Field(
+        default=False, description="Whether it answered the last time Warden asked."
+    )
+    cloud_model: str | None = None
 
 
 class CollectorHealth(Contract):

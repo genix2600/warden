@@ -300,3 +300,86 @@ class TestSymptomClearedDoesNotMeanFixed:
         incident.state = IncidentState.VERIFYING
         agent._on_symptom_cleared(symptom.code)
         assert incident.state is IncidentState.VERIFYING
+
+
+class TestTheCooldownActuallyEngages:
+    """`_start_cooldown` was unreachable, and had been since it was written.
+
+    It was called only from `_set_state` when the new state was terminal, but
+    every one of the six terminal transitions called `Incident.close()` directly,
+    which sets the field on the model and knows nothing about the agent. So
+    `_reopen_after` was written to by nothing, `_REOPEN_AFTER_S` and
+    `_REOPEN_AFTER_UNACTIONABLE_S` were decorative, and a symptom still present
+    reopened on the very next tick.
+
+    That is why declining a network-profile change did nothing and Warden asked
+    again seconds later, forever.
+    """
+
+    @pytest.mark.asyncio
+    async def test_closing_an_incident_holds_its_symptom_down(self, agent, symptom) -> None:
+        agent._open_incident(symptom)
+        incident = agent.incidents[agent._incident_by_code[symptom.code]]
+        agent._close(incident, IncidentState.DECLINED)
+        assert symptom.code in agent._reopen_after
+
+    @pytest.mark.asyncio
+    async def test_a_held_symptom_does_not_open_a_second_incident(self, agent, symptom) -> None:
+        agent._open_incident(symptom)
+        first = agent._incident_by_code[symptom.code]
+        agent._close(agent.incidents[first], IncidentState.DECLINED)
+        agent._forget(agent.incidents[first])
+
+        agent._open_incident(symptom)
+        assert len(agent.incidents) == 1, "the cooldown did not suppress the reopen"
+
+    @pytest.mark.asyncio
+    async def test_asking_explicitly_still_overrides_the_hold(self, agent, symptom) -> None:
+        """The cooldown exists to stop Warden interrupting. Someone pressing
+        Check is not being interrupted, so it must not apply to them."""
+        agent.detectors._active[symptom.code] = symptom
+        agent._reopen_after[symptom.code] = 1e12
+        assert agent.check() == [symptom.code]
+
+
+class TestMuting:
+    @pytest.mark.asyncio
+    async def test_a_muted_symptom_never_opens_an_incident(self, agent, symptom) -> None:
+        """Stronger than the cooldown and survives a restart. The user has said
+        this is not a fault on their machine: a network kept Public on purpose,
+        a clock that is right but has no time server to prove it."""
+        agent.muted.add(symptom.code)
+        agent._open_incident(symptom)
+        assert agent.incidents == {}
+
+    @pytest.mark.asyncio
+    async def test_muting_does_not_stop_it_being_detected(self, agent, symptom) -> None:
+        """Muted suppresses the proposal, not the finding. It stays on the
+        Health page, because hiding it would be the opposite of the point."""
+        agent.muted.add(symptom.code)
+        agent.detectors._active[symptom.code] = symptom
+        agent._open_incident(symptom)
+
+        assert agent.incidents == {}, "muted must not open an incident"
+        assert symptom in agent.detectors.active, "muted must not hide the finding"
+
+    @pytest.mark.asyncio
+    async def test_declining_with_mute_records_the_code(self, agent, symptom) -> None:
+        agent._open_incident(symptom)
+        incident = agent.incidents[agent._incident_by_code[symptom.code]]
+        incident.state = IncidentState.AWAITING_APPROVAL
+
+        await agent.decline(incident.id, mute=True)
+
+        assert symptom.code in agent.muted
+        assert any("not to be told about it again" in note for note in incident.notes)
+
+    @pytest.mark.asyncio
+    async def test_declining_without_mute_leaves_it_unmuted(self, agent, symptom) -> None:
+        agent._open_incident(symptom)
+        incident = agent.incidents[agent._incident_by_code[symptom.code]]
+        incident.state = IncidentState.AWAITING_APPROVAL
+
+        await agent.decline(incident.id)
+
+        assert symptom.code not in agent.muted

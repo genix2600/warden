@@ -47,7 +47,13 @@ def load_key() -> str | None:
     if not path.exists():
         return None
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        # utf-8-sig, not utf-8. A byte-order mark makes json.loads fail outright,
+        # and on Windows a BOM is the *normal* outcome of a user opening this in
+        # Notepad, or of PowerShell 5.1's `Out-File -Encoding utf8`, or of a `>`
+        # redirection. Silently deciding a perfectly good key is unreadable
+        # because of three invisible bytes is not a failure anyone can debug.
+        # This codec strips a BOM if present and is a no-op if not.
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, ValueError) as exc:
         log.warning("could not read %s, treating as unset: %s", path, exc)
         return None

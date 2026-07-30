@@ -533,11 +533,21 @@ class Agent:
             )
             self._log(f"Running a command the cloud model wrote: {' '.join(composed.argv)}")
 
+            loop = asyncio.get_running_loop()
+
+            def on_output(stream: str, text: str) -> None:
+                # From the executor's reader threads, so it has to hop back.
+                loop.call_soon_threadsafe(
+                    self.bus.publish,
+                    ExecutionOutputEvent(incident_id=incident.id, stream=stream, text=text),  # type: ignore[arg-type]
+                )
+
             record = await asyncio.to_thread(
                 self._freeform.execute,
                 list(composed.argv),
                 approved_at=approved_at,
                 reads_only=composed.risk == "reads_only",
+                on_output=on_output,
             )
             incident.execution = record
             self.bus.publish(ExecutionFinishedEvent(incident_id=incident.id, record=record))
@@ -778,6 +788,15 @@ class Agent:
                 available=client.available,
                 model=client.resolve_model(),
                 endpoint=client.endpoint,
+                cloud_enabled=self.reasoner.cloud is not None,
+                cloud_available=(
+                    self.reasoner.cloud.available if self.reasoner.cloud is not None else False
+                ),
+                cloud_model=(
+                    self.reasoner.cloud.resolve_model()
+                    if self.reasoner.cloud is not None
+                    else None
+                ),
                 note=(
                     ""
                     if client.available

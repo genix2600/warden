@@ -48,6 +48,7 @@ from datetime import datetime
 
 from warden.contracts import ExecutionOutcome, ExecutionRecord, utcnow
 from warden.executor.restore import ensure_checkpoint
+from warden.executor.runner import Executor, OutputSink
 from warden.winenv import is_admin
 
 log = logging.getLogger(__name__)
@@ -166,14 +167,49 @@ def screen(argv: list[str]) -> str | None:
     # A shell invoked with an inline command string reintroduces everything the
     # argv-only rule exists to remove, so it is refused as a shape rather than
     # for anything it happens to contain.
-    if program in {"cmd", "powershell", "pwsh"} and any(
-        arg.lower() in {"/c", "/k", "-c", "-command"} for arg in argv[1:]
-    ):
+    if program in {"cmd", "powershell", "pwsh"} and _opens_a_shell(argv[1:]):
         return (
             "a command that opens a shell to run another command hides the real "
             "command from this check. Ask for the underlying command instead."
         )
     return None
+
+
+#: PowerShell switches that hand it code rather than a path.
+_INLINE_SWITCHES = ("command", "encodedcommand")
+
+#: Documented short forms that are *not* prefixes of the full name.
+#:
+#: This set exists because prefix matching alone is not how PowerShell resolves
+#: parameters, and assuming it was left a hole. ``-ec`` is the published alias
+#: for ``-EncodedCommand`` and ``"encodedcommand".startswith("ec")`` is false,
+#: so a rule built purely on prefixes let ``powershell -ec <base64>`` through --
+#: the single most useful thing to smuggle past a check whose whole purpose is
+#: that the person approving can read what will run.
+_INLINE_ALIASES = frozenset({"ec", "ec:", "c", "k"})
+
+
+def _opens_a_shell(args: list[str]) -> bool:
+    """Whether these arguments hand an interpreter code to run.
+
+    Two rules, because PowerShell resolves parameters two ways. Any unambiguous
+    **prefix** of a parameter name works, so ``-e``, ``-enc`` and ``-encodedcomm``
+    all reach ``-EncodedCommand``. And a handful of published **aliases** work
+    that are not prefixes at all, which is where ``-ec`` lives.
+
+    ``-File`` is deliberately absent from both lists. A script on disk is
+    something the user can open and read before approving, which is exactly the
+    property this check protects; inline code is not.
+    """
+    for raw in args:
+        token = raw.lstrip("-/").lower()
+        if not token:
+            continue
+        if token in _INLINE_ALIASES:
+            return True
+        if any(switch.startswith(token) for switch in _INLINE_SWITCHES):
+            return True
+    return False
 
 
 class FreeformExecutor:
@@ -185,7 +221,7 @@ class FreeformExecutor:
         *,
         approved_at: datetime,
         reads_only: bool = False,
-        on_output: object | None = None,
+        on_output: OutputSink | None = None,
     ) -> ExecutionRecord:
         """Run an approved, model-written command. ``approved_at`` is required."""
         record = ExecutionRecord(
@@ -209,37 +245,51 @@ class FreeformExecutor:
             state = ensure_checkpoint()
             log.info("restore point before composed command: %s", state.detail)
 
-        return self._run(argv, record)
+        return self._run(argv, record, on_output)
 
-    def _run(self, argv: list[str], record: ExecutionRecord) -> ExecutionRecord:
+    def _run(
+        self,
+        argv: list[str],
+        record: ExecutionRecord,
+        on_output: OutputSink | None,
+    ) -> ExecutionRecord:
+        """Run it, streaming both pipes as they fill.
+
+        This used to be a `subprocess.run` that captured everything and handed
+        it back at the end, and the `on_output` parameter beside it was dead.
+        For a reviewed action that would merely be a downgrade; here it is worse,
+        because a composed command is the one case where the user has the least
+        idea what is about to happen and most needs to watch it happen. `sfc
+        /scannow` runs for minutes and prints progress the whole time, and a
+        blank panel until it finishes is indistinguishable from a hang.
+
+        The pump is the reviewed runner's, unchanged: two reader threads, since
+        a command that fills stderr while we block on stdout deadlocks.
+        """
         record.started_at = utcnow()
         log.info("executing composed command: %s", argv)
         try:
-            proc = subprocess.run(
+            proc = subprocess.Popen(
                 argv,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.DEVNULL,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
                 shell=False,
-                timeout=_MAX_RUNTIME_S,
-                stdin=subprocess.DEVNULL,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
-        except subprocess.TimeoutExpired:
-            record.timed_out = True
-            record.outcome = ExecutionOutcome.NOT_RESOLVED
-            record.stderr_tail = f"the command was still running after {_MAX_RUNTIME_S:.0f}s"
-            record.finished_at = utcnow()
-            return record
         except (OSError, ValueError) as exc:
             record.outcome = ExecutionOutcome.ERROR
             record.stderr_tail = f"could not start the command: {exc}"
             record.finished_at = utcnow()
             return record
 
-        record.stdout_tail = proc.stdout[-_TAIL_CHARS:]
-        record.stderr_tail = proc.stderr[-_TAIL_CHARS:]
+        stdout, stderr = Executor._pump(proc, on_output, _MAX_RUNTIME_S, record)
+
+        record.stdout_tail = stdout[-_TAIL_CHARS:]
+        record.stderr_tail = stderr[-_TAIL_CHARS:]
         record.exit_code = proc.returncode
         record.finished_at = utcnow()
         # Exit code only. Warden measured `netsh wlan connect` returning zero on
@@ -249,7 +299,7 @@ class FreeformExecutor:
         # user rather than converted into a verdict Warden cannot support.
         record.outcome = (
             ExecutionOutcome.RESOLVED
-            if proc.returncode == 0
+            if proc.returncode == 0 and not record.timed_out
             else ExecutionOutcome.NOT_RESOLVED
         )
         return record

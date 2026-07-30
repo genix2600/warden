@@ -158,7 +158,7 @@ export function IncidentStage({
               to be able to tell a reviewed action from a written one at a
               glance, and a shared component would have made that a styling
               detail rather than a structural one. */}
-          {diagnosis.composed && (
+          {incident.state === "awaiting_approval" && diagnosis.composed && (
             <ComposedCard
               command={diagnosis.composed}
               busy={busy}

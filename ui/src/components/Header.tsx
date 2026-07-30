@@ -60,9 +60,24 @@ export function Header({
           </button>
         )}
 
+        {/* Three states, and the cloud one is called out rather than blended
+            in. A hosted model answering under a pill reading "local model"
+            would be the one lie this interface cannot afford. */}
         {reasoner && (
-          <Pill tone={reasoner.available ? "good" : "idle"}>
-            {reasoner.available ? reasoner.model : "rules engine"}
+          <Pill
+            tone={
+              reasoner.cloud_available
+                ? "warning"
+                : reasoner.available
+                  ? "good"
+                  : "idle"
+            }
+          >
+            {reasoner.cloud_available
+              ? `cloud · ${reasoner.cloud_model}`
+              : reasoner.available
+                ? reasoner.model
+                : "rules engine"}
           </Pill>
         )}
 

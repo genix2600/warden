@@ -77,7 +77,10 @@ def load() -> Settings:
     if not path.exists():
         return Settings()
     try:
-        return Settings.model_validate_json(path.read_text(encoding="utf-8"))
+        # utf-8-sig: a BOM, which Notepad and PowerShell both write by
+        # default on Windows, otherwise makes this file silently unparseable
+        # and resets every preference to its default.
+        return Settings.model_validate_json(path.read_text(encoding="utf-8-sig"))
     except (OSError, ValueError) as exc:
         log.warning("could not read %s, using defaults: %s", path, exc)
         return Settings()

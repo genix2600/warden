@@ -123,3 +123,44 @@ class TestBlockedRecord:
         assert record.exit_code is None
         assert record.blocked_reason is not None
         assert "firewall" in record.blocked_reason
+
+
+class TestPowerShellSwitchResolution:
+    """PowerShell resolves a parameter two ways, and an early version of this
+    check knew about neither.
+
+    It compared against a literal set, `{"/c", "/k", "-c", "-command"}`. That
+    misses every abbreviation, and the abbreviations are not a curiosity: `-ec`
+    is the published short form of `-EncodedCommand`, so
+    `powershell -ec <base64>` walked past a check whose entire purpose is that
+    the person approving can read what will run.
+
+    Prefix matching alone does not close it either, because "encodedcommand"
+    does not start with "ec". Both rules are needed and both are pinned here.
+    """
+
+    @pytest.mark.parametrize(
+        "switch",
+        ["-e", "-en", "-enc", "-encod", "-encodedcommand", "-EncodedCommand", "-EC"],
+    )
+    def test_every_way_of_spelling_encodedcommand_is_refused(self, switch: str) -> None:
+        assert screen(["powershell", switch, "ZQBjAGgAbwA="]) is not None
+
+    @pytest.mark.parametrize("switch", ["-c", "-com", "-comm", "-command", "-Command"])
+    def test_every_way_of_spelling_command_is_refused(self, switch: str) -> None:
+        assert screen(["powershell", switch, "whoami"]) is not None
+
+    @pytest.mark.parametrize("switch", ["/c", "/k", "/C", "/K"])
+    def test_cmd_shell_switches_are_refused(self, switch: str) -> None:
+        assert screen(["cmd", switch, "dir"]) is not None
+
+    def test_a_script_on_disk_is_still_allowed(self) -> None:
+        """-File is deliberately not refused. A script is something the user can
+        open and read before approving, which is the property being protected;
+        inline code is not."""
+        assert screen(["powershell", "-NoProfile", "-File", "check.ps1"]) is None
+
+    def test_execution_policy_is_not_mistaken_for_encodedcommand(self) -> None:
+        """Both begin with 'e'. Refusing -ExecutionPolicy would break a common
+        and harmless invocation, so the prefix rule must not be greedy."""
+        assert screen(["powershell", "-ExecutionPolicy", "Bypass", "-File", "x.ps1"]) is None
