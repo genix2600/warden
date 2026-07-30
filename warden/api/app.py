@@ -92,10 +92,10 @@ def _shutdown_this_instance() -> None:
 def _no_model_detail() -> str:
     """Why there is no model, phrased for whichever build this is.
 
-    The standard download is about 160 MB and leaves the weights out; the
-    offline one carries them. Telling someone with the lean build to run an
-    Ollama command they do not have would be useless advice, so the two cases
-    say different things.
+    The standard download is 46 MB and leaves the weights out; the offline one
+    carries them. Telling someone with the lean build to run an Ollama command
+    they do not have would be useless advice, so the two cases say different
+    things.
     """
     from warden.reasoner.host import bundled_binary
 

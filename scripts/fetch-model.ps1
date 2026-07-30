@@ -24,7 +24,7 @@
     Stage ollama.exe and its CPU libraries, but not the model weights.
 
     This is the default edition. The weights are 940 MB of the 1,061 MB staged
-    here, and leaving them out takes the installer from 967 MB to about 160 MB
+    here, and leaving them out takes the installer from 967 MB to 46 MB
     -- which is the difference between someone trying Warden and closing the
     tab. Warden then fetches the model on request, from the Readiness page,
     into %LOCALAPPDATA% where it survives an upgrade.

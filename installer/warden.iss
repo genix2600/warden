@@ -13,7 +13,7 @@
 ;   the user meets that limit. An application that could not start without
 ;   administrator would have no business installing without one either.
 ;
-;   Two editions, from the same script. The standard one is about 160 MB and
+;   Two editions, from the same script. The standard one is 46 MB and
 ;   carries the model runtime but no weights; Warden fetches those on request,
 ;   from the Readiness page, into %LOCALAPPDATA% where they survive an upgrade.
 ;   The -offline edition bundles the weights too, at about 967 MB, for machines

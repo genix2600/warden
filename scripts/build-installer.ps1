@@ -7,9 +7,10 @@
     The result is a single file to hand someone: no zip to extract, a Start Menu
     entry, an uninstaller, and an entry in Add/Remove Programs.
 
-    The installer is roughly a gigabyte, which is too large for GitHub to accept
-    as a repository file and too large for Vercel to serve. It belongs on a
-    GitHub Release, where the website's download button points:
+    Build artefacts belong on a GitHub Release rather than in the repository --
+    the standard installer would fit, but the offline edition is 967 MB, past
+    both GitHub's 100 MB file limit and Vercel's. The website's download button
+    points at the release, so it needs no editing when a version ships:
 
         https://github.com/genix2600/warden/releases/latest/download/Warden-Setup-0.1.0.exe
 
@@ -19,7 +20,7 @@
 
 .PARAMETER Offline
     Build the edition that carries the model weights inside it -- about 967 MB
-    rather than 160 MB. Stage the payload with scripts\fetch-model.ps1 (no
+    rather than 46 MB. Stage the payload with scripts\fetch-model.ps1 (no
     -RuntimeOnly) first, or this produces the small build under the big name.
 #>
 [CmdletBinding()]
@@ -63,12 +64,23 @@ if (-not (Test-Path (Join-Path $root 'dist\Warden\Warden.exe'))) {
     throw "dist\Warden\Warden.exe is missing. Drop -SkipBuild and build it."
 }
 
-# The model runtime is what makes a shared install behave like this machine. Its
-# absence is legal but should never pass unremarked into something being handed
-# to strangers.
-if (-not (Test-Path (Join-Path $root 'dist\Warden\_internal\runtime\ollama.exe'))) {
-    Write-Warning "This bundle has no model runtime. Anyone installing it will see"
-    Write-Warning "'rules engine' in the header. Run scripts\fetch-model.ps1 first."
+# Warden runs without a model, but a build with no *runtime* cannot even fetch
+# one, so that absence is permanent and should never pass unremarked into
+# something handed to strangers. Weights being present or absent decides which
+# edition this is, and the two must not end up under the same filename.
+$runtimeDir = Join-Path $root 'dist\Warden\_internal\runtime'
+if (-not (Test-Path (Join-Path $runtimeDir 'ollama.exe'))) {
+    Write-Warning "This bundle has no model runtime, so it cannot download a model"
+    Write-Warning "either -- it is stuck on the rules engine. Run"
+    Write-Warning "scripts\fetch-model.ps1 -RuntimeOnly first."
+}
+$hasWeights = Test-Path (Join-Path $runtimeDir 'models')
+if ($Offline -and -not $hasWeights) {
+    throw "-Offline was asked for, but no weights are staged. Re-run scripts\fetch-model.ps1 without -RuntimeOnly."
+}
+if (-not $Offline -and $hasWeights) {
+    Write-Warning "Weights are staged but -Offline was not passed, so this would be a"
+    Write-Warning "967 MB installer under the standard name. Re-stage with -RuntimeOnly."
 }
 
 # -- Compile ------------------------------------------------------------------

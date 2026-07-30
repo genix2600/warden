@@ -68,7 +68,7 @@ def model_store() -> Path:
 
     Two editions ship. The offline one carries the weights inside the bundle, so
     it serves them from there -- read-only is fine, and nothing will ever be
-    written back. The standard one is about 160 MB instead of 967 MB and has no
+    written back. The standard one is 46 MB instead of 967 MB and has no
     weights at all, so the store has to be somewhere the user can write, and
     somewhere that survives an upgrade replacing the application folder.
 
