@@ -118,7 +118,11 @@ export default function App() {
           )}
           {!warming && page === "model" && <Model />}
           {!warming && page === "settings" && (
-            <Settings theme={theme} onThemeChange={setTheme} />
+            <Settings
+              theme={theme}
+              onThemeChange={setTheme}
+              onOpenModel={() => setPage("model")}
+            />
           )}
           {!warming && page === "readiness" && <Readiness snapshot={state.snapshot} />}
         </main>

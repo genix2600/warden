@@ -16,9 +16,11 @@ import { PageHeader } from "../components/PageHeader";
 export function Settings({
   theme,
   onThemeChange,
+  onOpenModel,
 }: {
   theme: "dark" | "light";
   onThemeChange: (theme: "dark" | "light") => void;
+  onOpenModel: () => void;
 }) {
   const [settings, setSettings] = useState<SettingsModel | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -98,10 +100,44 @@ export function Settings({
         />
       </Group>
 
+      {/* Someone looking for the API key field looks here first, and this
+          paragraph used to tell them there was nowhere to put one and stop. It
+          is still true -- settings.json genuinely holds no credential -- and it
+          was still a dead end, so it now says where the key does go. */}
+      <Group
+        title="Looking for the AI model, or an API key?"
+        blurb="Neither lives here. Which brain answers is a capability rather than a preference, so it has its own page."
+      >
+        <button
+          type="button"
+          onClick={onOpenModel}
+          className="flex w-full items-center gap-3 rounded-lg border border-hairline bg-sunken px-4 py-3 text-left transition-colors hover:bg-raised"
+        >
+          <span className="text-series-1">
+            <Icon name="chip" size={18} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13px] font-medium text-ink">
+              Open the Model page
+            </span>
+            <span className="mt-0.5 block text-[12px] leading-snug text-muted">
+              Choose which brain answers, and add a Groq key if you want the cloud
+              one. It is stored separately from these settings.
+            </span>
+          </span>
+          <span className="shrink-0 text-[16px] text-muted" aria-hidden>
+            →
+          </span>
+        </button>
+      </Group>
+
       <p className="mt-6 max-w-2xl border-t border-hairline pt-4 text-[12px] leading-relaxed text-muted">
         Settings live in <code className="font-mono">%LOCALAPPDATA%\Warden\settings.json</code>,
         beside your recorded sessions, so an update does not reset them. The file holds a
-        theme name and a switch. There is nowhere in it for a password or a key.
+        theme, a switch and the findings you have muted, and nothing else. A cloud API key,
+        if you add one, goes in{" "}
+        <code className="font-mono">credentials.json</code> next to it rather than in here,
+        so that nothing which reads your settings can read your key.
       </p>
     </div>
   );
