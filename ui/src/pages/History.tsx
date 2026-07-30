@@ -89,7 +89,7 @@ function IncidentRow({
           </div>
           <p className="mt-0.5 text-[12px] text-ink-2">
             {stateLabel(incident.state)}
-            {verification ? ` — ${verification.detail}` : ""}
+            {verification ? `. ${verification.detail}` : ""}
           </p>
         </div>
       </button>
@@ -178,7 +178,7 @@ function IncidentRow({
           {incident.notes.length > 0 && (
             <ul className="space-y-1 text-[11px] text-muted">
               {incident.notes.map((note, index) => (
-                <li key={index}>— {note}</li>
+                <li key={index}>{note}</li>
               ))}
             </ul>
           )}
@@ -208,7 +208,7 @@ function EmptyState() {
       <div>
         <p className="text-[15px] font-medium text-ink">Nothing has happened yet</p>
         <p className="mt-1 max-w-md text-[13px] leading-relaxed text-muted">
-          When Warden notices something, the whole story ends up here — what it saw, what it
+          When Warden notices something, the whole story ends up here: what it saw, what it
           concluded, what you approved, and whether it actually worked. Including the times it
           did not.
         </p>

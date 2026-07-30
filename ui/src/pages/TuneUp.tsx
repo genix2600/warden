@@ -90,7 +90,7 @@ export function TuneUp() {
       {report && (
         <p className="mt-6 max-w-2xl border-t border-hairline pt-4 text-[12px] leading-relaxed text-muted">
           Warden only lists a setting when it can measure what changes. If it cannot tell
-          you the number, it does not tell you to change it — which is why there is no
+          you the number, it does not tell you to change it. That is why there is no
           registry cleaning here, and no button promising a percentage.
         </p>
       )}

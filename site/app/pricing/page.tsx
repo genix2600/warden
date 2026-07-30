@@ -30,7 +30,7 @@ const TIERS = [
     features: [
       "All 13 areas watched continuously",
       "All 15 fixes, each with evidence and approval",
-      "Local AI model included — works offline",
+      "Local AI model included, works offline",
       "Verification after every fix",
       "Tune-up: settings that are measurably wrong",
       "Session history you can reopen",
@@ -157,8 +157,8 @@ export default function PricingPage() {
           <p>
             Warden cannot take that route without becoming the thing it was built against, so
             it does not. Detection and repair are both free, and always will be. If a paid tier
-            ever exists it will be for managing machines that are not yours — scheduling,
-            reporting, fleets — not for permission to fix your own.
+            ever exists it will be for managing machines that are not yours: scheduling,
+            reporting, fleets. Not for permission to fix your own.
           </p>
         </Prose>
       </Section>

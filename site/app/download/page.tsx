@@ -44,7 +44,7 @@ export default function DownloadPage() {
           </h2>
           <p className="mt-1.5 text-[13px] leading-relaxed text-ink-2">
             The standard download fetches the AI model on request, the first time you ask
-            for it — about {MODEL_SIZE}, kept afterwards. Everything else works before that,
+            for it, about {MODEL_SIZE}, kept afterwards. Everything else works before that,
             using the built-in rules engine.
           </p>
           {OFFLINE_AVAILABLE ? (
@@ -66,7 +66,7 @@ export default function DownloadPage() {
 
       <Callout tone="warning" title="Windows will warn you, and here is why">
         <p>
-          The installer is not code-signed — a certificate costs a few hundred pounds a year
+          The installer is not code-signed, because a certificate costs a few hundred pounds
           and this is a student project. So SmartScreen will show{" "}
           <em>&ldquo;Windows protected your PC&rdquo;</em> the first time you run it. Choose{" "}
           <strong className="text-ink">More info</strong>, then{" "}
@@ -88,8 +88,8 @@ export default function DownloadPage() {
             and most people would never find out whether the software was any good.
           </p>
           <p>
-            Instead the first launch works immediately using the built-in rules engine —
-            which handles every scenario end to end — and the Readiness page offers to fetch
+            Instead the first launch works immediately using the built-in rules engine, which
+            handles every scenario end to end, and the Readiness page offers to fetch
             the model when you want it. About {MODEL_SIZE}, downloaded once, kept in your
             user folder, and used offline from then on.
           </p>
@@ -129,7 +129,7 @@ export default function DownloadPage() {
           <Requirement label="Windows" value="10 or 11, 64-bit (x64)" />
           <Requirement label="Disk" value="200 MB, plus 1 GB if you add the model" />
           <Requirement label="Memory" value="4 GB, 8 GB comfortably" />
-          <Requirement label="Graphics" value="None needed — it runs on the processor" />
+          <Requirement label="Graphics" value="None needed. It runs on the processor" />
         </div>
         <p className="mt-3 text-[13px] leading-relaxed text-muted">
           Warden also needs the Microsoft Edge WebView2 Runtime to draw its window. Windows 11
@@ -147,7 +147,7 @@ export default function DownloadPage() {
         </a>
         <p className="mt-2 text-[13px] leading-relaxed text-ink-2">
           Extract it anywhere and run <Code>Warden.exe</Code> from inside the folder. Keep the
-          folder together — the <Code>_internal</Code> directory beside the executable is not
+          folder together, because the <Code>_internal</Code> directory beside it is not
           optional.
         </p>
       </Section>

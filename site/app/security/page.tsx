@@ -28,7 +28,7 @@ export default function SecurityPage() {
           />
           <Fact
             title="No API keys"
-            body="The repository is public and contains no credentials — and has nowhere to put one, because the model is local. That is a property of the design, not a policy someone has to remember."
+            body="The repository is public and contains no credentials, and has nowhere to put one, because the model is local. That is a property of the design, not a policy someone has to remember."
           />
           <Fact
             title="Loopback only"
@@ -45,7 +45,7 @@ export default function SecurityPage() {
             a diagnostician that needs the internet to explain why you have no internet is
             not a diagnostician.
           </strong>{" "}
-          The privacy consequence — that your machine&rsquo;s configuration never leaves it —
+          The privacy consequence, that your machine&rsquo;s configuration never leaves it,
           comes free with getting the engineering right.
         </p>
       </Callout>
@@ -56,7 +56,7 @@ export default function SecurityPage() {
       >
         <Prose>
           <p>
-            Warden can run fifteen commands. Not fifteen kinds of command — fifteen specific
+            Warden can run fifteen commands. Not fifteen kinds of command: fifteen specific
             ones, written by hand, sitting in the source where you can read them before you
             install anything. The AI selects from that list; it cannot compose, extend or edit
             it.
@@ -85,7 +85,7 @@ export default function SecurityPage() {
           />
           <Fact
             title="Everything it did is written down"
-            body="Each run records what was read, what was concluded, what you approved and whether it worked — including the times it did not. It is a file on your disk, in a format you can read."
+            body="Each run records what was read, what was concluded, what you approved and whether it worked, including the times it did not. It is a file on your disk, in a format you can read."
           />
         </div>
       </Section>
@@ -114,7 +114,7 @@ export default function SecurityPage() {
         <Prose>
           <p>
             If you find a security issue, please open an issue on GitHub. This is a student
-            project without a formal disclosure process — but a real problem will be taken
+            project without a formal disclosure process, but a real problem will be taken
             seriously and fixed in the open.
           </p>
         </Prose>

@@ -19,8 +19,8 @@ export default function PrivacyPage() {
         <Prose>
           <p>
             <strong className="text-ink">Nothing is transmitted.</strong> Warden reads a great
-            deal about your computer — the Windows event log, installed services, device
-            inventory, network configuration, drive health, temperatures — and all of it stays
+            deal about your computer: the Windows event log, installed services, device
+            inventory, network configuration, drive health, temperatures. All of it stays
             on the machine it was read from.
           </p>
           <p>
@@ -56,7 +56,7 @@ export default function PrivacyPage() {
           <p>
             Warden&rsquo;s reasoning runs on a language model bundled with the download and
             executed on your processor. Your machine&rsquo;s configuration is never sent to a
-            model provider, because there is no provider — no third-party AI service is
+            model provider, because there is no provider. No third-party AI service is
             involved at any point.
           </p>
         </Prose>

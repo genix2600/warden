@@ -17,8 +17,8 @@ export default function TermsPage() {
       <Section title="The licence">
         <Prose>
           <p>
-            Warden is released under the licence in the repository, and that licence — not this
-            page — is what governs your use of the software. This page is a plain-English
+            Warden is released under the licence in the repository, and that licence, not this
+            page, is what governs your use of the software. This page is a plain-English
             summary of what it means in practice.
           </p>
           <p>
@@ -44,8 +44,8 @@ export default function TermsPage() {
           <p>
             Warden changes Windows settings when you approve it to. Those changes are real, and
             you are responsible for deciding whether to allow them. The design tries hard to
-            make that decision an informed one — you see the exact command, its effect, and the
-            test that will judge it, before anything runs — but the decision remains yours.
+            make that decision an informed one. You see the exact command, its effect, and the
+            test that will judge it, before anything runs. But the decision remains yours.
           </p>
         </Prose>
       </Section>

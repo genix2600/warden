@@ -45,7 +45,7 @@ export function Header({
           data presented as live would destroy the only thing this tool sells. */}
       {replaying && (
         <span className="rounded bg-warning px-2 py-0.5 text-[11px] font-bold text-plane">
-          REPLAY — recorded session, not this machine
+          REPLAY: recorded session, not this machine
         </span>
       )}
 
@@ -56,7 +56,7 @@ export function Header({
             onClick={onResync}
             className="rounded border border-warning/50 px-2 py-1 text-[11px] text-warning hover:bg-raised"
           >
-            missed some events — resync
+            missed some events, resync
           </button>
         )}
 

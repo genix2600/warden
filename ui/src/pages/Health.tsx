@@ -116,7 +116,7 @@ export function Health({
         <p className="mt-5 max-w-2xl text-[12px] leading-relaxed text-muted">
           Each area is checked by reading the machine directly, not by asking Windows for a
           summary. An area shows <span className="text-ink-2">Can&apos;t tell</span> when the
-          reading failed — Warden will not report something as healthy because it could not
+          reading failed. Warden will not report something as healthy because it could not
           look at it.
         </p>
       )}
@@ -193,7 +193,7 @@ function DomainCard({
                 </dt>
                 <dd className="ml-auto flex items-center gap-1.5">
                   <span className="truncate font-mono text-[11px] text-ink-2">
-                    {brief ?? "—"}
+                    {brief ?? "n/a"}
                     {observation.unit && brief !== null ? ` ${observation.unit}` : ""}
                   </span>
                   <button

@@ -55,7 +55,7 @@ export function Capabilities() {
         title="What Warden can do"
         subtitle={
           report
-            ? `${report.actions.length} actions in total, and ${report.symptoms_with_no_software_fix.length} problems it has decided it cannot fix. This is the complete list — there is no other way for it to change your machine.`
+            ? `${report.actions.length} actions in total, and ${report.symptoms_with_no_software_fix.length} problems it has decided it cannot fix. This is the complete list. There is no other way for it to change your machine.`
             : "Loading the full action list…"
         }
       />
@@ -96,7 +96,7 @@ export function Capabilities() {
             </div>
             <p className="mb-3 max-w-3xl text-[12px] leading-relaxed text-ink-2">
               These are physical or upstream problems. There is no command in the list above
-              that helps, so Warden does not offer one — it explains what it found and who
+              that helps, so Warden does not offer one. It explains what it found and who
               needs to act. This is enforced in the code, not by good intentions: for these
               problems the set of available actions is empty, so nothing can select one.
             </p>

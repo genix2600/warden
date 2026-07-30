@@ -16,7 +16,7 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
     a: (
       <>
         Not to work. The reasoning happens on your own processor, so once Warden is set up
-        it keeps working when the network is the thing that is broken — which matters,
+        it keeps working when the network is the thing that is broken. That matters,
         because a troubleshooter that needs the internet to explain why you have no internet
         is useless in the exact situation it is for.
         <br />
@@ -66,7 +66,7 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
         gigabyte and is fetched separately, on request, from the Readiness page.
         <br />
         <br />
-        Warden is useful before you do that — the rules engine handles every scenario end to
+        Warden is useful before you do that. The rules engine handles every scenario end to
         end, and the interface tells you which one answered. Spending a gigabyte of your
         bandwidth because you opened an application is not a decision Warden makes for you.
       </>
@@ -79,7 +79,7 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
         The installer is not code-signed, because a certificate costs a few hundred pounds a
         year and this is a student project. SmartScreen warns about any unsigned installer.
         Choose <strong className="text-ink">More info</strong> then{" "}
-        <strong className="text-ink">Run anyway</strong> — and if that makes you uneasy, good
+        <strong className="text-ink">Run anyway</strong>. If that makes you uneasy, good
         instinct: the source is public and you can build it yourself instead.
       </>
     ),
@@ -88,8 +88,8 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
     q: "Do I need to be an administrator?",
     a: (
       <>
-        Not to install it, and not to run it. Some fixes do need administrator — restarting a
-        device or a Windows service — and for those Warden says so and offers to restart itself
+        Not to install it, and not to run it. Some fixes do need administrator, such as restarting
+        a device or a Windows service, and for those Warden says so and offers to restart itself
         with the rights it needs. Everything else works as a standard user.
       </>
     ),
@@ -101,7 +101,7 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
         Several things stop that mattering much. It can only choose from a fixed list, and only
         actions permitted for that specific problem. Its parameters are checked against what
         was actually measured. You see the command before it runs. And afterwards Warden
-        re-measures — if the fix did not work, it says so and tries something else rather than
+        re-measures. If the fix did not work, it says so and tries something else rather than
         declaring victory.
       </>
     ),
@@ -110,8 +110,8 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
     q: "Does it work on Mac or Linux?",
     a: (
       <>
-        No. Warden reads Windows-specific interfaces — WMI, the Windows event log, the registry,
-        Windows services — and there is no meaningful cross-platform version of what it does.
+        No. Warden reads Windows-specific interfaces: WMI, the Windows event log, the registry,
+        Windows services. There is no meaningful cross-platform version of what it does.
         Windows 10 and 11, 64-bit.
       </>
     ),
@@ -120,7 +120,7 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
     q: "Will it slow my computer down?",
     a: (
       <>
-        The monitoring is light — it samples a handful of Windows APIs on a timer. The AI model
+        The monitoring is light, and samples a handful of Windows APIs on a timer. The AI model
         only loads when there is something to reason about, and it will use your processor
         properly for those ten or twenty seconds. It is idle the rest of the time.
       </>

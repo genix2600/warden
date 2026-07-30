@@ -25,7 +25,7 @@ function obj(observation: Observation | undefined): Record<string, unknown> {
  * genuinely heterogeneous shapes. Coercing at the point of display -- rather
  * than casting the whole payload to an invented interface -- keeps the lie out
  * of the type system. */
-function text(value: unknown, fallback = "–"): string {
+function text(value: unknown, fallback = "n/a"): string {
   if (value === null || value === undefined) return fallback;
   if (typeof value === "number") return String(value);
   if (typeof value === "string") return value;
@@ -102,7 +102,7 @@ export function TelemetryPanel({ telemetry, series, collectors, onInspect }: Pro
         <div className="grid grid-cols-2 gap-2">
           <Tile
             label="Processor"
-            value={cpu === null ? "–" : cpu.toFixed(0)}
+            value={cpu === null ? "n/a" : cpu.toFixed(0)}
             unit="%"
             note={
               typeof clock.model === "string"
@@ -127,7 +127,7 @@ export function TelemetryPanel({ telemetry, series, collectors, onInspect }: Pro
           />
           <Tile
             label="Wireless"
-            value={connected ? `${signal?.toFixed(0) ?? "–"}` : "Down"}
+            value={connected ? `${signal?.toFixed(0) ?? "n/a"}` : "Down"}
             unit={connected ? "%" : undefined}
             note={connected ? String(link.ssid ?? "") : String(link.state ?? "unknown")}
             tone={connected ? "idle" : "critical"}
@@ -136,7 +136,7 @@ export function TelemetryPanel({ telemetry, series, collectors, onInspect }: Pro
           />
           <Tile
             label="Memory"
-            value={typeof memory.percent === "number" ? memory.percent.toFixed(0) : "–"}
+            value={typeof memory.percent === "number" ? memory.percent.toFixed(0) : "n/a"}
             unit="%"
             note={
               typeof memory.available_mb === "number"
@@ -201,7 +201,7 @@ export function TelemetryPanel({ telemetry, series, collectors, onInspect }: Pro
         {freeGb !== null && (
           <p className="mt-2 text-[11px] text-muted">
             Drive C: {freeGb.toFixed(0)} GB free of{" "}
-            {typeof system?.total_gb === "number" ? system.total_gb.toFixed(0) : "–"} GB
+            {typeof system?.total_gb === "number" ? system.total_gb.toFixed(0) : "n/a"} GB
           </p>
         )}
       </section>

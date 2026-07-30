@@ -5,15 +5,15 @@ import { Footer, Header } from "@/components/chrome";
 export const metadata: Metadata = {
   metadataBase: new URL("https://warden.vercel.app"),
   title: {
-    default: "Warden — the Windows troubleshooter that shows its work",
-    template: "%s — Warden",
+    default: "Warden: the Windows troubleshooter that shows its work",
+    template: "%s · Warden",
   },
   description:
     "Warden reads your actual machine, works out what is wrong, shows you the evidence, "
     + "and runs nothing without your permission. Then it re-measures to check the fix worked.",
   keywords: ["windows troubleshooter", "pc diagnostics", "local ai", "system repair"],
   openGraph: {
-    title: "Warden — the Windows troubleshooter that shows its work",
+    title: "Warden: the Windows troubleshooter that shows its work",
     description:
       "Reads your machine, proposes one specific fix with the readings that justify it, "
       + "asks first, then re-measures to prove it worked.",

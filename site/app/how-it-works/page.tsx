@@ -13,17 +13,17 @@ const STAGES = [
   {
     n: "01",
     title: "It reads the machine",
-    body: "Thirteen collectors sample continuously, each on its own schedule — wireless every two seconds, drive health every minute. Every reading carries the exact command that produced it, how long that took, and how much the collector trusts it. Nothing is inferred at this stage and nothing is judged.",
+    body: "Thirteen collectors sample continuously, each on its own schedule: wireless every two seconds, drive health every minute. Every reading carries the exact command that produced it, how long that took, and how much the collector trusts it. Nothing is inferred at this stage and nothing is judged.",
   },
   {
     n: "02",
     title: "Readings become symptoms",
-    body: "Plain rules, no AI. A condition has to hold across consecutive samples before it counts, so a wireless blip is not an incident. When one fault causes several, the root cause suppresses the rest — otherwise you get four alarms for one problem.",
+    body: "Plain rules, no AI. A condition has to hold across consecutive samples before it counts, so a wireless blip is not an incident. When one fault causes several, the root cause suppresses the rest, because otherwise you get four alarms for one problem.",
   },
   {
     n: "03",
     title: "A local model explains it",
-    body: "The model receives the symptom, the readings that support it, and a short list of permitted actions. It writes the explanation and picks one action. It runs on your processor, so this works with the network down — which matters, because the network being down is one of the things Warden fixes.",
+    body: "The model receives the symptom, the readings that support it, and a short list of permitted actions. It writes the explanation and picks one action. It runs on your processor, so this works with the network down. That matters, because the network being down is one of the things Warden fixes.",
   },
   {
     n: "04",
@@ -38,7 +38,7 @@ const STAGES = [
   {
     n: "06",
     title: "It proves the fix",
-    body: 'Warden re-reads the machine and evaluates the test you already approved. Three answers, not two: it worked, it did not, or it could not tell. If it did not work, the incident escalates — the failed action is excluded and the next proposal has to be something else.',
+    body: 'Warden re-reads the machine and evaluates the test you already approved. Three answers, not two: it worked, it did not, or it could not tell. If it did not work, the incident escalates: the failed action is excluded and the next proposal has to be something else.',
   },
 ];
 
@@ -90,7 +90,7 @@ export default function HowItWorksPage() {
           <Gate
             n={3}
             title="The command is rebuilt and compared"
-            body="The command is generated again, from the template and the parameters, and checked against the one being proposed. If they differ by a character it is refused. Nothing downstream is trusted to hand over a command — not even Warden's own earlier self."
+            body="The command is generated again, from the template and the parameters, and checked against the one being proposed. If they differ by a character it is refused. Nothing downstream is trusted to hand over a command, not even Warden's own earlier self."
           />
           <Gate
             n={4}
@@ -109,7 +109,7 @@ export default function HowItWorksPage() {
         <p>
           A troubleshooter that reports success without checking is the thing this exists to
           replace. Every action declares its success test <em>before</em> you approve, so you
-          are agreeing to the standard as well as the command — and afterwards &ldquo;it&rsquo;s
+          are agreeing to the standard as well as the command, and afterwards &ldquo;it&rsquo;s
           fixed&rdquo; is a measurement you already signed off, not a claim you have to take on
           faith.
         </p>
@@ -118,7 +118,7 @@ export default function HowItWorksPage() {
       <Section title="Read it yourself">
         <Prose>
           <p>
-            The source is public. If you only open three files, open these — they carry the
+            The source is public. If you only open three files, open these. They carry the
             design.
           </p>
         </Prose>

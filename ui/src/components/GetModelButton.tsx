@@ -49,8 +49,8 @@ export function GetModelButton() {
       {message && <p className="mt-1.5 text-[11px] leading-relaxed text-muted">{message}</p>}
       {busy && (
         <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
-          This takes a few minutes. You can keep using Warden while it runs — the rules
-          engine is answering in the meantime.
+          This takes a few minutes. You can keep using Warden while it runs, and the
+          rules engine answers in the meantime.
         </p>
       )}
     </div>

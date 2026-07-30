@@ -58,7 +58,7 @@ export function EvidenceDrawer({
               {observation.provenance.probe}
             </code>
             <p className="mt-1.5 text-[11px] text-muted">
-              You can run this yourself and get the same answer. That is the point.
+              You can run this yourself and get the same answer.
             </p>
           </Field>
 
@@ -73,7 +73,7 @@ export function EvidenceDrawer({
 
           {observation.confidence < 1 && (
             <p className="rounded border border-hairline bg-sunken p-2.5 text-[11px] leading-relaxed text-ink-2">
-              This source is not fully authoritative — it is either derived rather than
+              This source is not fully authoritative. It is either derived rather than
               measured directly, or parsed from output that varies by system language.
               Warden weights it accordingly instead of treating it as certain.
             </p>

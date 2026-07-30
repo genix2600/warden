@@ -90,7 +90,7 @@ export function Settings({
           detail={
             settings?.autodiagnose
               ? "Warden reasons about anything it finds and proposes a fix without being asked. It still never runs anything without your approval."
-              : "Findings appear on the Health page and wait. Nothing is diagnosed until you press Look into this — so a printer you do not own never interrupts you."
+              : "Findings appear on the Health page and wait. Nothing is diagnosed until you press Look into this, so a printer you do not own never interrupts you."
           }
           on={settings?.autodiagnose ?? false}
           busy={saving || settings === null}
@@ -101,7 +101,7 @@ export function Settings({
       <p className="mt-6 max-w-2xl border-t border-hairline pt-4 text-[12px] leading-relaxed text-muted">
         Settings live in <code className="font-mono">%LOCALAPPDATA%\Warden\settings.json</code>,
         beside your recorded sessions, so an update does not reset them. The file holds a
-        theme name and a switch — there is nowhere in it for a password or a key.
+        theme name and a switch. There is nowhere in it for a password or a key.
       </p>
     </div>
   );

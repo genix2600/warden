@@ -152,7 +152,7 @@ export function Sparkline({ series, height = 96, max = 100 }: Props) {
               <span aria-hidden className="size-1.5 rounded-full" style={{ background: s.color }} />
               <span className="text-ink-2">{s.label}</span>
               <span className="ml-auto pl-2 font-mono text-ink tabular-nums">
-                {s.values[hover]?.toFixed(0) ?? "–"}%
+                {s.values[hover]?.toFixed(0) ?? "n/a"}%
               </span>
             </div>
           ))}

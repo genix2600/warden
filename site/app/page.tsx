@@ -32,7 +32,7 @@ function Hero() {
         <p className="rise mx-auto mt-6 max-w-2xl text-[17px] leading-relaxed text-ink-2">
           Warden reads real signals off your machine, works out the cause, and proposes{" "}
           <strong className="font-semibold text-ink">one specific command</strong> with the
-          readings that justify it. It asks before running anything — then re-measures to
+          readings that justify it. It asks before running anything, then re-measures to
           check it actually worked.
         </p>
 
@@ -84,7 +84,7 @@ function Problem() {
     },
     {
       title: '"Optimisers" invent problems to sell you',
-      body: "Scan, find 4,182 issues, pay to fix. The issues are registry keys that do nothing, and the improvement is unmeasurable — which is the point, because an unfalsifiable claim cannot be checked.",
+      body: "Scan, find 4,182 issues, pay to fix. The issues are registry keys that do nothing, and the improvement is unmeasurable. That is the point: an unfalsifiable claim cannot be checked.",
     },
   ];
 
@@ -116,7 +116,7 @@ function Loop() {
     {
       n: "01",
       title: "Reads",
-      body: "Thirteen collectors sample the machine continuously — wireless state, temperatures, drive health, services, the event log, privacy settings.",
+      body: "Thirteen collectors sample the machine continuously: wireless state, temperatures, drive health, services, the event log, privacy settings.",
     },
     {
       n: "02",
@@ -126,7 +126,7 @@ function Loop() {
     {
       n: "03",
       title: "Asks",
-      body: "You see the exact command, what it will do, and the test that will decide whether it worked — before you approve. No timer, no default.",
+      body: "You see the exact command, what it will do, and the test that will decide whether it worked, all before you approve. No timer, no default.",
     },
     {
       n: "04",
@@ -189,7 +189,7 @@ function Refusals() {
             Seven problems Warden will not pretend to fix.
           </h2>
           <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-ink-2">
-            Not a disclaimer — a list enforced in the code. For these, the set of available
+            Not a disclaimer. It is a list enforced in the code: for these, the set of available
             actions is literally empty, so nothing can select one however confident it is.
           </p>
         </Reveal>

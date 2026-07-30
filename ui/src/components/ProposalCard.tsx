@@ -91,7 +91,7 @@ export function ProposalCard({
           <div className="rounded-lg border border-warning/40 bg-warning/5 p-3">
             <p className="text-[12px] leading-relaxed text-ink-2">
               This fix needs administrator rights, and Warden is running as a standard
-              user. Everything else on this page still works — restart elevated and the
+              user. Everything else on this page still works. Restart elevated and the
               same proposal will be waiting.
             </p>
             <ElevateButton compact />

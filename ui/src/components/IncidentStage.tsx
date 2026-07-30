@@ -74,8 +74,8 @@ export function IncidentStage({
             {diagnosis.reasoner.fallback_reason && (
               <p className="mt-2 text-[11px] leading-relaxed text-muted">
                 The local model was not used: {diagnosis.reasoner.fallback_reason}. The
-                deterministic rules engine answered instead — it reaches the same
-                conclusions, it just writes shorter explanations.
+                deterministic rules engine answered instead. It reaches the same
+                conclusions and writes shorter explanations.
               </p>
             )}
           </section>
@@ -240,7 +240,7 @@ export function IncidentStage({
       {incident.notes.length > 0 && (
         <ul className="space-y-1 text-[12px] text-muted">
           {incident.notes.map((note, index) => (
-            <li key={index}>— {note}</li>
+            <li key={index}>{note}</li>
           ))}
         </ul>
       )}

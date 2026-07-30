@@ -48,7 +48,7 @@ export function Evidence({
     <div className="scroll-y h-full px-6 py-5">
       <PageHeader
         title="Readings"
-        subtitle={`Everything Warden has read from this machine — ${total} live values, each with the exact command that produced it. You can run any of them yourself and get the same answer.`}
+        subtitle={`Everything Warden has read from this machine. ${total} live values, each with the exact command that produced it. You can run any of them yourself and get the same answer.`}
         actions={
           <div className="relative">
             <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted">
