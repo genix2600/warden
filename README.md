@@ -2,7 +2,7 @@
 
 **An agentic Windows diagnostician that reads your machine, shows you the evidence, and runs nothing without your say-so.**
 
-`v1.0.0` · Windows 10 and 11, x64 · 332 tests · runs on your own machine by default
+`v1.0.0` · Windows 10 and 11, x64 · 360 tests · runs on your own machine by default
 
 [Website](https://warden-genix2600s-projects.vercel.app) · [Download](https://github.com/genix2600/warden/releases/latest) · [Architecture](ARCHITECTURE.md) · [Measurements](docs/calibration.md)
 
@@ -226,7 +226,7 @@ connection. That one is roughly 967 MB.
 | System access | CIM and `Get-Net*` cmdlets over a persistent PowerShell host, `psutil`, `netsh`, ACPI/WMI, optional LibreHardwareMonitor via pythonnet | Locale-independent where it matters. |
 | Packaging | PyInstaller (onedir) and Inno Setup | A folder rather than a self-extracting binary, which starts faster and trips fewer antivirus heuristics. |
 | Website | Next.js, Tailwind v4, on Vercel | Nine static pages, no backend. |
-| Quality | pytest, mypy, ruff | 332 tests needing no Windows hardware. mypy clean across 77 modules, strict on `contracts/`. |
+| Quality | pytest, mypy, ruff | 360 tests needing no Windows hardware. mypy clean across 77 modules, strict on `contracts/`. |
 
 ### Why the model is small
 
@@ -345,7 +345,7 @@ ui/              React interface. src/generated/ is produced, not written.
 site/            The website. Vercel Root Directory must be set to site.
 installer/       Inno Setup definition.
 scripts/         Build, icon generation, model staging, schema export.
-tests/           332 tests, none of which need Windows-specific hardware.
+tests/           360 tests, none of which need Windows-specific hardware.
 docs/            The calibration measurements behind every threshold.
 ```
 
@@ -368,7 +368,7 @@ and the full list of what Warden refuses to attempt.
 ```powershell
 python -m warden --headless --port 8099   # backend only, API docs at /docs
 cd ui; npm run dev                        # interface with hot reload
-python -m pytest                          # 332 tests, about 8 seconds
+python -m pytest                          # 360 tests, about 4 seconds
 python -m mypy warden                     # 77 modules, strict on contracts/
 python -m ruff check .; python -m ruff format .
 cd ui; npm run gen:types                  # regenerate TS types from contracts
