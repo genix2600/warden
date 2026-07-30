@@ -8,9 +8,6 @@ file is about Warden declining to offer something.
 from __future__ import annotations
 
 import inspect
-from datetime import timedelta
-
-import pytest
 
 from warden.audit.apply import apply, describe_change
 from warden.audit.recommend import FIXES, recommend
@@ -18,13 +15,12 @@ from warden.contracts import (
     CheckResult,
     CheckStatus,
     MetricReading,
-    utcnow,
 )
 from warden.executor import Executor
 from warden.playbooks import REGISTRY
 from warden.store import ObservationStore
 
-from .test_audit_settings import reading, store_with
+from .test_audit_settings import store_with
 
 
 def measurement(value: object) -> MetricReading:
