@@ -164,3 +164,23 @@ export function toneBg(tone: StatusTone): string {
     idle: "bg-muted",
   }[tone];
 }
+
+/** What answered, named honestly.
+ *
+ * Three modes, not two, and the difference is disclosure rather than
+ * decoration: a cloud answer sent readings from this machine to a third party
+ * and may carry a command the model wrote rather than one Warden reviewed.
+ * Calling that "local model" because the enum used to have two values would be
+ * a lie the interface tells on every diagnosis. */
+export function reasonerLabel(mode: string, model: string | null): string {
+  if (mode === "cloud") return `cloud model · ${model ?? "?"}`;
+  if (mode === "llm") return `local model · ${model ?? "?"}`;
+  return "rules engine";
+}
+
+/** Short form, for a list. */
+export function reasonerShort(mode: string): string {
+  if (mode === "cloud") return "cloud model";
+  if (mode === "llm") return "local model";
+  return "rules engine";
+}

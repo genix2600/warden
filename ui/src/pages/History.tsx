@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { renderArgv, since, stateLabel, stateTone } from "../lib/format";
+import { reasonerShort, renderArgv, since, stateLabel, stateTone } from "../lib/format";
 import { isTerminal } from "../lib/useWarden";
 import type { Incident } from "../types";
 import { Icon } from "../components/Icon";
@@ -101,7 +101,7 @@ function IncidentRow({
               <Section label="What Warden concluded">
                 {incident.diagnosis.summary}
                 <span className="ml-2 text-[11px] text-muted">
-                  ({incident.diagnosis.reasoner.mode === "llm" ? "local model" : "rules engine"})
+                  ({reasonerShort(incident.diagnosis.reasoner.mode)})
                 </span>
               </Section>
 

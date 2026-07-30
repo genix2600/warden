@@ -366,8 +366,28 @@ def _routes(agent: Agent, harness: DemoHarness, model_host: ModelHost | None) ->
             incident = await agent.describe(symptom, note=request.message)
         except RuntimeError as exc:
             return ChatReply(reply=str(exc), detail="no reasoner available")
-        summary = incident.diagnosis.summary if incident.diagnosis else ""
-        return ChatReply(incident_id=incident.id, reply=summary)
+        diagnosis = incident.diagnosis
+        if diagnosis is None:
+            return ChatReply(incident_id=incident.id, reply="Warden could not work that out.")
+
+        # The rules engine has handlers for the codes its detectors raise and
+        # nothing for an arbitrary description, so its "summary" here is the
+        # user's own sentence handed back. Echoing someone's words at them and
+        # calling it a diagnosis is the single most chatbot-like thing this
+        # application could do, so it says what is actually true instead.
+        if diagnosis.reasoner.mode == "rules" and diagnosis.proposal is None:
+            return ChatReply(
+                incident_id=incident.id,
+                reply=(
+                    "Warden has no way to reason about a description on its own. Its "
+                    "rules engine only knows the faults its detectors can find, and "
+                    "the local model can only choose from the 17 reviewed actions. "
+                    "Turn on the cloud model from the Model page and ask again, or "
+                    "open Health to see what Warden has found by itself."
+                ),
+                detail="no model able to answer a free-text description",
+            )
+        return ChatReply(incident_id=incident.id, reply=diagnosis.summary)
 
     @router.post("/incidents/{incident_id}/approve-composed", response_model=Incident)
     async def approve_composed(incident_id: str) -> Incident:

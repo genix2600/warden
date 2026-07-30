@@ -28,6 +28,9 @@ export type ReasonerHealth = S["ReasonerHealth"];
 export type DoctorReport = S["DoctorReport"];
 export type CapabilityReport = S["CapabilityReport"];
 export type Severity = S["Severity"];
+export type ComposedCommand = S["ComposedCommand"];
+export type ReasonerStatus = S["ReasonerStatus"];
+export type ChatReply = S["ChatReply"];
 
 export type AuditReport = S["AuditReport"];
 export type Settings = S["Settings"];
@@ -85,10 +88,12 @@ export type StatusTone = "good" | "warning" | "serious" | "critical" | "idle";
  *  a fixed-size desktop window with no deep links and no browser history. */
 export type PageId =
   | "overview"
+  | "ask"
   | "health"
   | "tuneup"
   | "history"
   | "capabilities"
   | "evidence"
+  | "model"
   | "settings"
   | "readiness";

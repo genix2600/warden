@@ -23,7 +23,7 @@ export function ProposalCard({
 }: {
   proposal: ActionProposal;
   onApprove: () => void;
-  onDecline: () => void;
+  onDecline: (mute: boolean) => void;
   busy: boolean;
   elevated: boolean;
 }) {
@@ -116,10 +116,24 @@ export function ProposalCard({
           <button
             type="button"
             disabled={busy}
-            onClick={() => void guarded(async () => onDecline())}
+            onClick={() => void guarded(async () => onDecline(false))}
             className="rounded-lg border border-hairline px-4 py-2 text-sm font-medium text-ink-2 transition-colors hover:bg-raised hover:text-ink disabled:opacity-50"
           >
             No thanks
+          </button>
+          {/* Some findings are not faults on this machine: a network kept
+              Public on purpose, a clock that is right but has no time server to
+              prove it. Declining alone meant asking again later, which over a
+              working day is nagging, and nagging about a decision already made
+              is how a tool teaches people to ignore it. */}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void guarded(async () => onDecline(true))}
+            title="Warden keeps detecting this and keeps showing it on Health. It stops proposing a fix."
+            className="rounded-lg border border-hairline px-3 py-2 text-[12px] text-muted transition-colors hover:bg-raised hover:text-ink-2 disabled:opacity-50"
+          >
+            No, and stop asking
           </button>
           <span className="ml-auto text-[11px] text-muted">
             Nothing happens until you choose. Warden will wait indefinitely.

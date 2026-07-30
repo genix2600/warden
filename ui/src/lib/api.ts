@@ -3,7 +3,9 @@ import type {
   AgentSnapshot,
   AuditApplied,
   AuditReport,
+  ChatReply,
   CheckStarted,
+  ReasonerStatus,
   Settings,
   CapabilityReport,
   DoctorReport,
@@ -54,7 +56,24 @@ export const api = {
   relaunchElevated: () =>
     json<{ started: boolean; detail: string }>("/api/relaunch-elevated", { method: "POST" }),
   approve: (id: string) => json<Incident>(`/api/incidents/${id}/approve`, { method: "POST" }),
-  decline: (id: string) => json<Incident>(`/api/incidents/${id}/decline`, { method: "POST" }),
+  approveComposed: (id: string) =>
+    json<Incident>(`/api/incidents/${id}/approve-composed`, { method: "POST" }),
+  reasoner: () => json<ReasonerStatus>("/api/reasoner"),
+  setKey: (apiKey: string) =>
+    json<ReasonerStatus>("/api/reasoner/key", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: apiKey }),
+    }),
+  clearKey: () => json<ReasonerStatus>("/api/reasoner/key", { method: "DELETE" }),
+  ask: (message: string) =>
+    json<ChatReply>("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+    }),
+  decline: (id: string, mute = false) =>
+    json<Incident>(`/api/incidents/${id}/decline?mute=${mute}`, { method: "POST" }),
   dropWifi: () => json<{ detail: string }>("/api/demo/wifi-drop", { method: "POST" }),
   loadCpu: (seconds: number) =>
     json<{ detail: string }>(`/api/demo/cpu-load?seconds=${seconds}`, { method: "POST" }),

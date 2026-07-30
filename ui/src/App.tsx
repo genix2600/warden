@@ -9,10 +9,12 @@ import { EvidenceDrawer } from "./components/EvidenceDrawer";
 import { Header } from "./components/Header";
 import { Sidebar } from "./components/Sidebar";
 import { Warming } from "./components/Warming";
+import { Ask } from "./pages/Ask";
 import { Capabilities } from "./pages/Capabilities";
 import { Evidence } from "./pages/Evidence";
 import { Health } from "./pages/Health";
 import { History } from "./pages/History";
+import { Model } from "./pages/Model";
 import { Overview } from "./pages/Overview";
 import { Readiness } from "./pages/Readiness";
 import { Settings } from "./pages/Settings";
@@ -32,14 +34,24 @@ export default function App() {
   // of them means Warden is doing something about it.
   const warming = state.snapshot?.warming ?? false;
 
-  const decide = useCallback(async (id: string, choice: "approve" | "decline") => {
-    setBusy(true);
-    try {
-      await (choice === "approve" ? api.approve(id) : api.decline(id));
-    } finally {
-      setBusy(false);
-    }
-  }, []);
+  const decide = useCallback(
+    async (id: string, choice: "approve" | "approve-composed" | "decline" | "mute") => {
+      setBusy(true);
+      try {
+        // Three routes, not two with a flag. `approve` runs something from the
+        // reviewed registry whose argv is re-derived and compared first;
+        // `approve-composed` runs a command a model wrote. One endpoint
+        // branching on which field happened to be populated would have hidden
+        // exactly the distinction this interface spends its time drawing.
+        if (choice === "approve") await api.approve(id);
+        else if (choice === "approve-composed") await api.approveComposed(id);
+        else await api.decline(id, choice === "mute");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [],
+  );
 
   // Only things genuinely awaiting a human decision earn a badge. A count of
   // "open incidents" would include everything Warden is quietly working
@@ -80,7 +92,8 @@ export default function App() {
               log={state.log}
               onInspect={setInspecting}
               onApprove={(id) => decide(id, "approve")}
-              onDecline={(id) => decide(id, "decline")}
+              onApproveComposed={(id) => decide(id, "approve-composed")}
+              onDecline={(id, mute) => decide(id, mute ? "mute" : "decline")}
               onSeeHealth={() => setPage("health")}
               busy={busy}
               elevated={state.snapshot?.elevated ?? false}
@@ -96,12 +109,14 @@ export default function App() {
               onChecked={() => setPage("overview")}
             />
           )}
+          {!warming && page === "ask" && <Ask onOpened={() => setPage("overview")} />}
           {!warming && page === "tuneup" && <TuneUp />}
           {!warming && page === "history" && <History incidents={incidents} />}
           {!warming && page === "capabilities" && <Capabilities />}
           {!warming && page === "evidence" && (
             <Evidence telemetry={state.telemetry} onInspect={setInspecting} />
           )}
+          {!warming && page === "model" && <Model />}
           {!warming && page === "settings" && (
             <Settings theme={theme} onThemeChange={setTheme} />
           )}

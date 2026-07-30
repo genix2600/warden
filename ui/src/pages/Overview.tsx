@@ -11,7 +11,8 @@ interface Props {
   log: LogLine[];
   onInspect: (observation: Observation) => void;
   onApprove: (id: string) => Promise<void>;
-  onDecline: (id: string) => Promise<void>;
+  onApproveComposed: (id: string) => Promise<void>;
+  onDecline: (id: string, mute: boolean) => Promise<void>;
   onSeeHealth: () => void;
   busy: boolean;
   elevated: boolean;
@@ -30,6 +31,7 @@ export function Overview({
   log,
   onInspect,
   onApprove,
+  onApproveComposed,
   onDecline,
   onSeeHealth,
   busy,
@@ -77,6 +79,7 @@ export function Overview({
           }
           onInspect={onInspect}
           onApprove={onApprove}
+          onApproveComposed={onApproveComposed}
           onDecline={onDecline}
           busy={busy}
           elevated={elevated}

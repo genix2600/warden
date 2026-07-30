@@ -1,5 +1,6 @@
 import type { Incident, Observation, OutputLine } from "../types";
-import { renderArgv, since, stateLabel, stateTone } from "../lib/format";
+import { reasonerLabel, renderArgv, since, stateLabel, stateTone } from "../lib/format";
+import { ComposedCard } from "./ComposedCard";
 import { ProposalCard } from "./ProposalCard";
 import { Pill, StatusDot } from "./StatusDot";
 
@@ -10,7 +11,8 @@ interface Props {
   observationsById: (id: string) => Observation | undefined;
   onInspect: (observation: Observation) => void;
   onApprove: (id: string) => Promise<void>;
-  onDecline: (id: string) => Promise<void>;
+  onApproveComposed: (id: string) => Promise<void>;
+  onDecline: (id: string, mute: boolean) => Promise<void>;
   busy: boolean;
   elevated: boolean;
 }
@@ -24,6 +26,7 @@ export function IncidentStage({
   observationsById,
   onInspect,
   onApprove,
+  onApproveComposed,
   onDecline,
   busy,
   elevated,
@@ -64,18 +67,18 @@ export function IncidentStage({
               <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted">
                 What Warden concluded
               </h2>
-              <Pill tone="idle">
-                {diagnosis.reasoner.mode === "llm"
-                  ? `local model · ${diagnosis.reasoner.model ?? "?"}`
-                  : "rules engine"}
+              <Pill tone={diagnosis.reasoner.mode === "cloud" ? "warning" : "idle"}>
+                {reasonerLabel(diagnosis.reasoner.mode, diagnosis.reasoner.model)}
               </Pill>
             </div>
             <p className="text-[15px] leading-relaxed text-ink">{diagnosis.summary}</p>
             {diagnosis.reasoner.fallback_reason && (
               <p className="mt-2 text-[11px] leading-relaxed text-muted">
-                The local model was not used: {diagnosis.reasoner.fallback_reason}. The
-                deterministic rules engine answered instead. It reaches the same
-                conclusions and writes shorter explanations.
+                {diagnosis.reasoner.fallback_reason}
+                {diagnosis.reasoner.mode === "rules"
+                  ? " The deterministic rules engine answered instead. It reaches the"
+                    + " same conclusions and writes shorter explanations."
+                  : ""}
               </p>
             )}
           </section>
@@ -146,8 +149,22 @@ export function IncidentStage({
               proposal={diagnosis.proposal}
               busy={busy}
               onApprove={() => onApprove(incident.id)}
-              onDecline={() => onDecline(incident.id)}
+              onDecline={(mute) => onDecline(incident.id, mute)}
               elevated={elevated}
+            />
+          )}
+
+          {/* Two cards, never one branching on which field is set. A user has
+              to be able to tell a reviewed action from a written one at a
+              glance, and a shared component would have made that a styling
+              detail rather than a structural one. */}
+          {diagnosis.composed && (
+            <ComposedCard
+              command={diagnosis.composed}
+              busy={busy}
+              elevated={elevated}
+              onApprove={() => onApproveComposed(incident.id)}
+              onDecline={() => onDecline(incident.id, false)}
             />
           )}
 
