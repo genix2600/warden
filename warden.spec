@@ -67,6 +67,9 @@ exe = EXE(
     a.scripts,
     exclude_binaries=True,
     name="Warden",
+    # Taskbar, Alt-Tab and File Explorer all read this from the executable
+    # rather than from anything the application draws at runtime.
+    icon=str(ROOT / "assets" / "warden.ico"),
     console=False,
     disable_windowed_traceback=False,
     upx=False,  # UPX-packed binaries are themselves an antivirus heuristic.

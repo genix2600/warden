@@ -86,12 +86,14 @@ class Agent:
         self.tick_s = tick_s
         self.tick = 0
         self.monitoring = False
+        self.warming = False
         self.started_at: datetime | None = None
         self.session_path: str | None = None
 
         self.incidents: dict[str, Incident] = {}
         self._incident_by_code: dict[str, str] = {}
         self._loop_task: asyncio.Task[None] | None = None
+        self._warmup_task: asyncio.Task[None] | None = None
         self._diagnosis_tasks: set[asyncio.Task[None]] = set()
         # One action at a time. Two fixes racing on the same machine is a class
         # of bug nobody should have to debug at a demonstration.
@@ -101,17 +103,48 @@ class Agent:
     # -- lifecycle ---------------------------------------------------------
 
     async def start(self) -> None:
-        if self.monitoring:
+        """Begin monitoring. Returns immediately; warmup continues behind it.
+
+        This used to await the warmup and the model probe inline, and because
+        uvicorn does not open its listening socket until application startup
+        returns, that meant the desktop window could not appear until both had
+        finished. Measured on a fresh install: 45 seconds of no window at all.
+        Not a slow window -- no window, a taskbar icon and doubt.
+
+        The work has not got faster. It simply no longer happens in front of
+        someone looking at nothing: the socket opens in milliseconds, the window
+        appears, and the interface shows what it is doing while the collectors
+        prime behind it.
+        """
+        if self.monitoring or self.warming:
             return
+        self.warming = True
+        self._publish_status()
         self._log("Starting up. Warming the Windows management interface.")
-        await asyncio.to_thread(self.collectors.warmup)
-        model = await self.reasoner.probe_model()
-        self._log(
-            f"Local model ready: {model}."
-            if model
-            else "No local model found. Diagnoses will use the built-in rules engine.",
-            level="info" if model else "warn",
-        )
+        self._warmup_task = asyncio.create_task(self._warm_up(), name="warden-warmup")
+
+    async def _warm_up(self) -> None:
+        """Pay the one-off startup costs, then start ticking."""
+        try:
+            await asyncio.to_thread(self.collectors.warmup)
+            model = await self.reasoner.probe_model()
+            self._log(
+                f"Local model ready: {model}."
+                if model
+                else "No local model found. Diagnoses will use the built-in rules engine.",
+                level="info" if model else "warn",
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            # A collector that cannot warm up is already reported as unhealthy
+            # and the tick loop copes with it. Refusing to start monitoring
+            # because one probe failed would be a far worse outcome than
+            # starting with one source missing.
+            log.warning("warmup did not finish cleanly; monitoring anyway", exc_info=True)
+
+        # `warming` deliberately stays true here. The first tick clears it, once
+        # there are readings on screen rather than merely a loop running.
         self.monitoring = True
         self.started_at = utcnow()
         self._loop_task = asyncio.create_task(self._run(), name="warden-agent-loop")
@@ -119,6 +152,15 @@ class Agent:
 
     async def stop(self) -> None:
         self.monitoring = False
+        self.warming = False
+        # Cancelled first: a warmup still in flight would otherwise set
+        # monitoring back to True after this returns, and start a tick loop
+        # against collectors that are being closed underneath it.
+        if self._warmup_task is not None:
+            self._warmup_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._warmup_task
+            self._warmup_task = None
         if self._loop_task is not None:
             self._loop_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -147,6 +189,16 @@ class Agent:
         due = self.collectors.due()
         result = await asyncio.to_thread(self.collectors.run, due)
         self.store.ingest(result.observations)
+
+        # Startup is over when there is something to look at, not when the
+        # warmup function returned. Measured: warmup finished at 4s but the
+        # first tick did not land readings until 12s, so clearing the flag
+        # early bought the user eight seconds of an empty dashboard with no
+        # explanation -- which is the thing the warming screen exists to
+        # prevent.
+        if self.warming:
+            self.warming = False
+            self._publish_status()
 
         self._collector_errors = {e.source: e.message for e in result.errors}
         if result.observations or result.errors:
@@ -398,6 +450,7 @@ class Agent:
         self.bus.publish(
             AgentStatusEvent(
                 monitoring=self.monitoring,
+                warming=self.warming,
                 tick=self.tick,
                 collectors_ok=[
                     c.id for c in self.collectors.collectors if c.id not in self._collector_errors
@@ -412,6 +465,7 @@ class Agent:
         client = self.reasoner.client
         return AgentSnapshot(
             monitoring=self.monitoring,
+            warming=self.warming,
             source=Source.LIVE,
             tick=self.tick,
             sequence=self.bus.sequence,

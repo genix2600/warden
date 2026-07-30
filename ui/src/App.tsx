@@ -7,6 +7,7 @@ import { DemoBar } from "./components/DemoBar";
 import { EvidenceDrawer } from "./components/EvidenceDrawer";
 import { Header } from "./components/Header";
 import { Sidebar } from "./components/Sidebar";
+import { Warming } from "./components/Warming";
 import { Capabilities } from "./pages/Capabilities";
 import { Evidence } from "./pages/Evidence";
 import { Health } from "./pages/Health";
@@ -23,6 +24,10 @@ export default function App() {
   const [page, setPage] = useState<PageId>("overview");
   const [inspecting, setInspecting] = useState<Observation | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Warming is not the same as paused: both mean no readings yet, but only one
+  // of them means Warden is doing something about it.
+  const warming = state.snapshot?.warming ?? false;
 
   const decide = useCallback(async (id: string, choice: "approve" | "decline") => {
     setBusy(true);
@@ -61,7 +66,11 @@ export default function App() {
         />
 
         <main className="min-h-0 flex-1">
-          {page === "overview" && (
+          {/* Startup used to happen before the window could exist, so the whole
+              wait was spent looking at nothing. The window now opens at once
+              and this stands in until the first readings land. */}
+          {warming && <Warming log={state.log} />}
+          {!warming && page === "overview" && (
             <Overview
               state={state}
               focus={focus}
@@ -74,16 +83,16 @@ export default function App() {
               elevated={state.snapshot?.elevated ?? false}
             />
           )}
-          {page === "health" && (
+          {!warming && page === "health" && (
             <Health onInspect={setInspecting} tick={state.snapshot?.tick ?? 0} />
           )}
-          {page === "tuneup" && <TuneUp />}
-          {page === "history" && <History incidents={incidents} />}
-          {page === "capabilities" && <Capabilities />}
-          {page === "evidence" && (
+          {!warming && page === "tuneup" && <TuneUp />}
+          {!warming && page === "history" && <History incidents={incidents} />}
+          {!warming && page === "capabilities" && <Capabilities />}
+          {!warming && page === "evidence" && (
             <Evidence telemetry={state.telemetry} onInspect={setInspecting} />
           )}
-          {page === "readiness" && <Readiness snapshot={state.snapshot} />}
+          {!warming && page === "readiness" && <Readiness snapshot={state.snapshot} />}
         </main>
 
         <DemoBar />

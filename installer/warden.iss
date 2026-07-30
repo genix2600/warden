@@ -52,6 +52,7 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 
+SetupIconFile=..\assets\warden.ico
 LicenseFile=..\LICENSE
 OutputDir=..\dist
 OutputBaseFilename={#AppName}-Setup-{#AppVersion}{#Edition}

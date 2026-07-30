@@ -59,6 +59,14 @@ class DomainHealth(Contract):
 
 class AgentSnapshot(Contract):
     monitoring: bool
+    #: Startup is still running: PowerShell is autoloading its modules and the
+    #: collectors have not all produced a first reading.
+    #:
+    #: Distinct from ``monitoring`` on purpose. Both are false during startup,
+    #: but "not watching yet" and "not watching" are different sentences, and
+    #: showing the second one while the first is true would tell the user
+    #: Warden is idle at the exact moment it is working hardest.
+    warming: bool = False
     source: Source
     tick: int
     sequence: int = Field(description="Latest event sequence number, for gap detection.")

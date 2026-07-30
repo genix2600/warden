@@ -1,4 +1,5 @@
 import type { AgentSnapshot } from "../types";
+import { Logo } from "./Logo";
 import { Pill, StatusDot } from "./StatusDot";
 
 export function Header({
@@ -19,14 +20,24 @@ export function Header({
 
   return (
     <header className="flex items-center gap-3 border-b border-hairline bg-surface px-5 py-2">
+      <Logo size={17} />
+
+      {/* Three states. Warming is not paused: both mean nothing is being
+          watched yet, but only one of them means Warden is working on it, and
+          labelling startup "Paused" told the user it was idle at the moment it
+          was busiest. */}
       <StatusDot
-        tone={connected ? (snapshot?.monitoring ? "good" : "idle") : "critical"}
+        tone={
+          !connected ? "critical" : snapshot?.monitoring ? "good" : snapshot?.warming ? "warning" : "idle"
+        }
         label={
-          connected
-            ? snapshot?.monitoring
+          !connected
+            ? "Not connected"
+            : snapshot?.monitoring
               ? "Watching this machine"
-              : "Paused"
-            : "Not connected"
+              : snapshot?.warming
+                ? "Starting up"
+                : "Paused"
         }
       />
 

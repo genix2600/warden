@@ -108,7 +108,27 @@ class ModelHost:
         self._process: subprocess.Popen[bytes] | None = None
         self._binary: Path | None = None
         self._environment: dict[str, str] = {}
+        self._port: int | None = None
         self.endpoint: str | None = None
+
+    def reserve(self) -> str | None:
+        """Claim a port and return the endpoint, without starting anything.
+
+        Starting the server costs about ten seconds on a first run, most of it
+        Ollama indexing a gigabyte of weights, and nothing needs the model until
+        the first diagnosis minutes later. So the caller reserves the address,
+        builds its client against it, opens the window, and starts the server
+        behind all of that.
+
+        A client pointed at a port nothing is listening on yet degrades exactly
+        as it should: the connection is refused, no model is reported, and the
+        rules engine answers until the server catches up.
+        """
+        if bundled_binary() is None:
+            return None
+        if self._port is None:
+            self._port = _free_port()
+        return f"http://127.0.0.1:{self._port}"
 
     def start(self) -> str | None:
         """Launch the bundled server. Returns its endpoint, or None if absent.
@@ -126,7 +146,9 @@ class ModelHost:
         models = model_store()
         models.mkdir(parents=True, exist_ok=True)
 
-        port = _free_port()
+        # Whatever reserve() handed the client, or a fresh port if nobody did.
+        port = self._port if self._port is not None else _free_port()
+        self._port = port
         host = f"127.0.0.1:{port}"
         environment = {
             **os.environ,

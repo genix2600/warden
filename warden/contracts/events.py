@@ -52,6 +52,7 @@ class AgentLogEvent(_Event):
 class AgentStatusEvent(_Event):
     type: Literal["agent.status"] = "agent.status"
     monitoring: bool
+    warming: bool = False
     tick: int
     collectors_ok: list[str] = Field(default_factory=list)
     collectors_failed: list[str] = Field(default_factory=list)

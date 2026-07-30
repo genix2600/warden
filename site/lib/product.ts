@@ -20,8 +20,13 @@ export const DOWNLOAD_URL = `${REPO}/releases/latest/download/Warden-Setup-${VER
 export const ZIP_URL = `${REPO}/releases/latest/download/Warden-${VERSION}.zip`;
 
 /** The edition that carries the model weights, for machines that will never
- *  have a usable connection. Six times the size, and worth it for exactly one
- *  audience. */
+ *  have a usable connection -- built by `build-installer.ps1 -Offline`.
+ *
+ *  Not published yet, and the site must not link to it until it is: an asset
+ *  that does not exist on the release 404s silently rather than erroring, so a
+ *  dead download button looks like a broken product rather than a missing
+ *  file. Set this to true in the same commit that uploads the asset. */
+export const OFFLINE_AVAILABLE = false;
 export const OFFLINE_URL = `${REPO}/releases/latest/download/Warden-Setup-${VERSION}-offline.exe`;
 
 export const INSTALLER_SIZE = "46 MB";

@@ -4,6 +4,7 @@ import {
   DOWNLOAD_URL,
   INSTALLER_SIZE,
   MODEL_SIZE,
+  OFFLINE_AVAILABLE,
   OFFLINE_SIZE,
   OFFLINE_URL,
   REPO,
@@ -43,16 +44,23 @@ export default function DownloadPage() {
           </h2>
           <p className="mt-1.5 text-[13px] leading-relaxed text-ink-2">
             The standard download fetches the AI model on request, the first time you ask
-            for it — about {MODEL_SIZE}, kept afterwards. If that machine will never have a
-            usable connection, take the offline edition instead: same software, with the
-            model already inside it.
+            for it — about {MODEL_SIZE}, kept afterwards. Everything else works before that,
+            using the built-in rules engine.
           </p>
-          <a
-            href={OFFLINE_URL}
-            className="mt-2.5 inline-block text-[13px] font-medium text-series-1 hover:underline"
-          >
-            Download the offline edition · {OFFLINE_SIZE} →
-          </a>
+          {OFFLINE_AVAILABLE ? (
+            <a
+              href={OFFLINE_URL}
+              className="mt-2.5 inline-block text-[13px] font-medium text-series-1 hover:underline"
+            >
+              Download the offline edition · {OFFLINE_SIZE} →
+            </a>
+          ) : (
+            <p className="mt-2.5 text-[12px] leading-relaxed text-muted">
+              An offline edition with the model already inside it is built by{" "}
+              <code className="font-mono text-[11px]">build-installer.ps1 -Offline</code> and
+              is not published yet. Until it is, you can build it from source.
+            </p>
+          )}
         </div>
       </section>
 

@@ -133,17 +133,22 @@ def main(argv: list[str] | None = None) -> int:
         log.error("Warden reads Windows-specific interfaces and only runs on Windows.")
         return 2
 
-    # Start the bundled model runtime before the agent, so the first incident
-    # finds a model already listening rather than racing it. Absent runtime is
-    # a supported configuration: the client then talks to whatever Ollama the
-    # user has, and failing that the rules engine answers.
+    # Reserve the model runtime's address now, start the server behind the
+    # window. Starting it here costs about ten seconds on a first run, and
+    # nothing needs a model until the first incident -- so it is ten seconds
+    # spent making someone watch an empty screen. Absent runtime is a supported
+    # configuration: the client then talks to whatever Ollama the user has, and
+    # failing that the rules engine answers.
     model_host = ModelHost()
-    endpoint = None if args.no_llm else model_host.start()
+    endpoint = None if args.no_llm else model_host.reserve()
 
     client = OllamaClient(
         endpoint=endpoint or DEFAULT_ENDPOINT,
         model=args.model or DEFAULT_MODEL,
     )
+
+    if endpoint is not None:
+        threading.Thread(target=model_host.start, name="warden-model-host", daemon=True).start()
 
     agent = Agent(reasoner=Reasoner(client=client, use_llm=not args.no_llm))
     app = create_app(agent, record=not args.no_record, model_host=model_host)

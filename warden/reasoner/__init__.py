@@ -62,6 +62,17 @@ class Reasoner:
         symptom = primary_symptom(symptoms)
         fallback_reason: str | None = None
 
+        # Re-probe before giving up on the model. ``available`` is a cached
+        # answer from the last check, and there are now several ways for it to
+        # be stale in the user's favour: the bundled runtime starts in the
+        # background and may not have been listening at startup, the user may
+        # have downloaded the model since, or they may have started their own
+        # Ollama. Falling back to rules while a working model sits there --
+        # for the rest of the session, because nothing else refreshes it --
+        # would be the wrong answer arrived at cheaply.
+        if self._use_llm and not self._client.available:
+            await self._client.refresh_models()
+
         if self._use_llm and self._client.available:
             try:
                 decision, model, latency_ms = await self._client.decide(

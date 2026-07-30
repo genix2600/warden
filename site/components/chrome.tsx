@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -165,22 +166,10 @@ function FooterColumn({
   );
 }
 
+/* The real mark, the same file Windows uses for the taskbar icon -- Next
+   serves app/icon.png from /icon.png and generates the favicon from it. */
 function Shield() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M12 3 5 6v5.5c0 4.2 2.9 8.1 7 9.5 4.1-1.4 7-5.3 7-9.5V6l-7-3Z"
-        stroke="var(--color-series-1)"
-        strokeWidth="1.7"
-        strokeLinejoin="round"
-      />
-      <path
-        d="m9 12 2 2 4-4"
-        stroke="var(--color-series-1)"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <Image src="/icon.png" alt="" aria-hidden width={18} height={18} priority />
   );
 }
