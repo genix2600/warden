@@ -53,6 +53,7 @@ from warden.contracts.state import AgentSnapshot, CollectorHealth, ReasonerHealt
 from warden.detectors import DetectorBank
 from warden.domains import DOMAIN_OF_SYMPTOM
 from warden.executor import Executor, Verifier
+from warden.executor.freeform import FreeformExecutor, needs_admin_but_lacks_it
 from warden.orchestrator.bus import EventBus
 from warden.playbooks import CANDIDATES
 from warden.reasoner import Reasoner
@@ -98,6 +99,8 @@ class Agent:
         self.bus = bus or EventBus()
         self.reasoner = reasoner or Reasoner()
         self.executor = Executor()
+        #: The other runner. Only ever reached by `approve_composed`.
+        self._freeform = FreeformExecutor()
         self.verifier = Verifier(self.collectors, self.store)
 
         self.tick_s = tick_s
@@ -359,7 +362,7 @@ class Agent:
         self._diagnosis_tasks.add(task)
         task.add_done_callback(self._diagnosis_tasks.discard)
 
-    async def _diagnose(self, incident: Incident) -> None:
+    async def _diagnose(self, incident: Incident, *, note: str = "") -> None:
         try:
             self._set_state(incident, IncidentState.DIAGNOSING)
             self._log("Gathering context: event log, device tree, running processes.")
@@ -372,7 +375,10 @@ class Agent:
                 else "Re-reasoning with what the last attempt taught us."
             )
             diagnosis = await self.reasoner.diagnose(
-                incident.symptoms, self.store, frozenset(incident.attempted_actions)
+                incident.symptoms,
+                self.store,
+                frozenset(incident.attempted_actions),
+                note=note,
             )
             incident.diagnosis = diagnosis
             self.bus.publish(DiagnosisReadyEvent(incident_id=incident.id, diagnosis=diagnosis))
@@ -389,6 +395,22 @@ class Agent:
                 self._log(
                     "Waiting for your approval to run: "
                     + " ".join(diagnosis.proposal.rendered_argv)
+                )
+            elif diagnosis.composed is not None and diagnosis.composed.refused is None:
+                # No ActionProposal exists on this path, so it cannot ride the
+                # branch above -- and it must not, because the interface has to
+                # be able to tell the two apart in order to label them honestly.
+                self._set_state(incident, IncidentState.AWAITING_APPROVAL)
+                self._log(
+                    "The cloud model wrote a command. Waiting for your approval to run: "
+                    + " ".join(diagnosis.composed.argv),
+                    level="warn",
+                )
+            elif diagnosis.composed is not None:
+                self._close(incident, IncidentState.UNRESOLVED)
+                self._log(
+                    f"Warden refused the command the model wrote: {diagnosis.composed.refused}",
+                    level="error",
                 )
             elif diagnosis.verdict is Verdict.NEEDS_SERVICE:
                 self._close(incident, IncidentState.NEEDS_SERVICE)
@@ -447,6 +469,105 @@ class Agent:
         self.bus.publish(IncidentClosedEvent(incident=incident))
         self._forget(incident)
         return incident
+
+    async def describe(self, symptom: Symptom, *, note: str = "") -> Incident:
+        """Open an incident from something the user typed rather than detected.
+
+        Detectors find what they were written to find. The person in front of
+        the machine knows things no collector reads: that it started after an
+        update, that it only happens on the external monitor, that sound works
+        in one application and not another. Warden had no way in for any of
+        that, and a diagnostic tool with no way to be told what is wrong is
+        answering a question nobody asked.
+
+        This is not a bypass. The description becomes a symptom like any other
+        and goes through the same reasoner, the same guardrail and the same
+        approval gate. What changes is only where the symptom came from, which
+        is recorded on it as the detector ``"user"``.
+        """
+        incident = Incident(title=symptom.title, symptoms=[symptom])
+        self.incidents[incident.id] = incident
+        self._log(f"You described: {symptom.detail}", level="info")
+        self.bus.publish(IncidentOpenedEvent(incident=incident))
+        await self._diagnose(incident, note=note)
+        return incident
+
+    async def approve_composed(self, incident_id: str) -> Incident:
+        """Run a command the cloud model wrote. The other entry to a shell.
+
+        Kept apart from :meth:`approve` because the guarantees differ and
+        collapsing them would hide that. ``approve`` runs something from a
+        reviewed registry whose argv is re-derived and compared before it runs,
+        and whose success is decided by a predicate declared in advance.
+        Nothing here has any of that: the command was written by a model, the
+        only automated check is the refusal list, and the result is the output
+        plus whatever the model said to look for.
+
+        What both share is the part that matters: nothing runs without a person
+        having read the exact command and pressed the button.
+        """
+        incident = self._require(incident_id, IncidentState.AWAITING_APPROVAL)
+        if incident.diagnosis is None or incident.diagnosis.composed is None:
+            raise ValueError("this incident has no composed command to run")
+        composed = incident.diagnosis.composed
+        if composed.refused is not None:
+            raise ValueError(f"Warden refused this command: {composed.refused}")
+
+        blocked = needs_admin_but_lacks_it(composed.requires_admin)
+        if blocked is not None:
+            incident.notes.append(blocked)
+            self._close(incident, IncidentState.UNRESOLVED)
+            self._log(blocked, level="error")
+            self.bus.publish(IncidentClosedEvent(incident=incident))
+            self._forget(incident)
+            return incident
+
+        approved_at = utcnow()
+        incident.decision = Decision.APPROVED
+        incident.decided_at = approved_at
+
+        async with self._execution_lock:
+            self._set_state(incident, IncidentState.EXECUTING)
+            self.bus.publish(
+                ExecutionStartedEvent(incident_id=incident.id, argv=list(composed.argv))
+            )
+            self._log(f"Running a command the cloud model wrote: {' '.join(composed.argv)}")
+
+            record = await asyncio.to_thread(
+                self._freeform.execute,
+                list(composed.argv),
+                approved_at=approved_at,
+                reads_only=composed.risk == "reads_only",
+            )
+            incident.execution = record
+            self.bus.publish(ExecutionFinishedEvent(incident_id=incident.id, record=record))
+
+            if record.outcome is ExecutionOutcome.BLOCKED:
+                incident.notes.append(record.blocked_reason or "The command was refused.")
+                self._close(incident, IncidentState.UNRESOLVED)
+                self._log(f"Refused to run: {record.blocked_reason}", level="error")
+                self.bus.publish(IncidentClosedEvent(incident=incident))
+                self._forget(incident)
+                return incident
+
+            # Deliberately not RESOLVED. There is no declared predicate here, so
+            # Warden has measured nothing and has no standing to say the problem
+            # is fixed. The user is given the exit code, the output and the
+            # model's own check, and makes that call themselves -- which is a
+            # weaker claim than the reviewed path makes, and an honest one.
+            incident.notes.append(
+                f"The command ran and exited {record.exit_code}. Warden did not verify "
+                f"this: a command the model wrote carries no test it can evaluate. "
+                f"{composed.check}".strip()
+            )
+            self._close(incident, IncidentState.UNRESOLVED)
+            self._log(
+                f"Ran, exit code {record.exit_code}. Not verified: no declared test.",
+                level="warn",
+            )
+            self.bus.publish(IncidentClosedEvent(incident=incident))
+            self._forget(incident)
+            return incident
 
     async def approve(self, incident_id: str) -> Incident:
         """The only entry point to the executor. Nothing else calls it."""

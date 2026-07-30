@@ -41,6 +41,7 @@ from warden.contracts.common import (
     utcnow,
 )
 from warden.contracts.diagnosis import (
+    ComposedCommand,
     Diagnosis,
     Hypothesis,
     ReasonerInfo,
@@ -89,6 +90,7 @@ __all__ = [
     "Contract",
     "Decision",
     "DecisionEvent",
+    "ComposedCommand",
     "Diagnosis",
     "DiagnosisReadyEvent",
     "Domain",

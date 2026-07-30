@@ -61,7 +61,19 @@ class ServiceAdvice(Contract):
 
 
 class ReasonerMode(StrEnum):
-    LLM = "llm"
+    """Which brain answered. Three, and the difference is not cosmetic.
+
+    ``LLM`` and ``CLOUD`` are separated rather than folded into one "a model
+    answered" value because the honest disclosure differs. A local answer was
+    reached without anything leaving the machine and is confined to the reviewed
+    action registry. A cloud answer sent readings to a third party and may carry
+    a command the model wrote itself. Labelling the second as the first would be
+    the precise kind of quiet overstatement this project is an argument against,
+    and every string in the interface that says "local model" reads this field.
+    """
+
+    LLM = "llm"  # on this machine's processor, reviewed actions only
+    CLOUD = "cloud"  # hosted, user's own key, may compose a command
     RULES = "rules"  # deterministic fallback; always available, never blocks
 
 
@@ -80,6 +92,39 @@ class ReasonerInfo(Contract):
     )
 
 
+class ComposedCommand(Contract):
+    """A command the cloud model wrote, rather than one Warden reviewed.
+
+    Kept as a separate field from :attr:`Diagnosis.proposal` on purpose. An
+    ``ActionProposal`` carries guarantees this cannot: it came from the closed
+    registry, its parameters were checked against what was actually observed on
+    the machine, and it declares a predicate that will decide whether it worked.
+    A composed command has none of those, and reusing the same type would let
+    the interface render both with the same confidence.
+
+    Every field except ``argv`` exists to be read before approving. A model that
+    will not say what its command changes or how to undo it has not earned the
+    button, and making them required means "it did not say" is a schema failure
+    rather than an empty panel.
+    """
+
+    argv: list[str] = Field(description="Exactly what will run. No shell, ever.")
+    explain: str = Field(description="What this does, in plain language.")
+    changes: str = Field(description="What it changes on the machine.")
+    reversible: bool
+    undo: str = Field(default="", description="How to put it back.")
+    check: str = Field(default="", description="How you can tell whether it worked.")
+    requires_admin: bool = False
+    risk: Literal["reads_only", "reversible", "disruptive"] = "disruptive"
+    refused: str | None = Field(
+        default=None,
+        description=(
+            "Why Warden will not offer this, from the refusal list. When set the "
+            "interface must show the refusal and no approve button."
+        ),
+    )
+
+
 class Diagnosis(Contract):
     id: str = Field(default_factory=new_id)
     created_at: datetime = Field(default_factory=utcnow)
@@ -89,6 +134,14 @@ class Diagnosis(Contract):
     verdict: Verdict
     service_advice: ServiceAdvice | None = None
     proposal: ActionProposal | None = None
+    composed: ComposedCommand | None = Field(
+        default=None,
+        description=(
+            "Set only on the cloud path, and only when no reviewed action fits. "
+            "Mutually exclusive with `proposal` in practice: a reviewed action is "
+            "grounded, verified and reversible, so it is always preferred."
+        ),
+    )
     reasoner: ReasonerInfo
 
     @model_validator(mode="after")

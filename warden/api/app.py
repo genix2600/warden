@@ -24,11 +24,19 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from warden import settings
+from warden import credentials, settings
 from warden.audit import run_audit
 from warden.audit.apply import apply as apply_recommendation_action
 from warden.audit.apply import describe_change
-from warden.contracts import ActionSpec, AgentEvent, AgentLogEvent, AuditReport, Incident
+from warden.contracts import (
+    ActionSpec,
+    AgentEvent,
+    AgentLogEvent,
+    AuditReport,
+    Incident,
+    Severity,
+    Symptom,
+)
 from warden.contracts.state import AgentSnapshot, DomainHealth
 from warden.demo import DemoHarness
 from warden.domains import DOMAINS, summarise
@@ -36,6 +44,7 @@ from warden.executor.restore import describe as describe_restore
 from warden.orchestrator import Agent, SessionRecorder
 from warden.paths import resource_path
 from warden.playbooks import CANDIDATES, REGISTRY
+from warden.reasoner import GroqClient
 from warden.reasoner.host import ModelHost, has_weights
 from warden.reasoner.llm import DEFAULT_MODEL
 from warden.settings import Settings
@@ -83,6 +92,42 @@ class AuditApplied(BaseModel):
     detail: str
     change: str = ""
     reverted: bool = False
+
+
+class ReasonerStatus(BaseModel):
+    """Which brains are available, and what enabling the cloud one costs.
+
+    Deliberately never carries the key. :func:`warden.credentials.hint` returns
+    the last four characters and that is the most this API will disclose, so a
+    screen recording of the Model page during a demonstration cannot leak it.
+    """
+
+    local_available: bool
+    local_model: str | None = None
+    cloud_enabled: bool = Field(description="Whether a key is stored and cloud mode is on.")
+    cloud_key_hint: str = Field(default="", description="Last four characters only.")
+    cloud_model: str | None = None
+    cloud_reachable: bool = False
+    detail: str = ""
+
+
+class KeyRequest(BaseModel):
+    api_key: str = Field(min_length=8, description="A Groq API key. Never logged, never returned.")
+
+
+class ChatRequest(BaseModel):
+    """A problem described in words rather than found by a detector."""
+
+    message: str = Field(min_length=1, max_length=2000)
+
+
+class ChatReply(BaseModel):
+    incident_id: str | None = Field(
+        default=None,
+        description="Set when the description was enough to open an incident.",
+    )
+    reply: str
+    detail: str = ""
 
 
 class CheckStarted(BaseModel):
@@ -240,6 +285,105 @@ def _routes(agent: Agent, harness: DemoHarness, model_host: ModelHost | None) ->
             )
             for domain in DOMAINS
         ]
+
+    # -- which brain, and the one secret Warden holds ----------------------
+
+    def _cloud_status(detail: str = "") -> ReasonerStatus:
+        key = credentials.load_key()
+        cloud = agent.reasoner.cloud
+        return ReasonerStatus(
+            local_available=agent.reasoner.client.available,
+            local_model=agent.reasoner.client.resolve_model(),
+            cloud_enabled=cloud is not None,
+            cloud_key_hint=credentials.hint(key),
+            cloud_model=cloud.resolve_model() if cloud is not None else None,
+            cloud_reachable=cloud.available if cloud is not None else False,
+            detail=detail,
+        )
+
+    @router.get("/reasoner", response_model=ReasonerStatus)
+    async def reasoner_status() -> ReasonerStatus:
+        return _cloud_status()
+
+    @router.put("/reasoner/key", response_model=ReasonerStatus)
+    async def set_key(request: KeyRequest) -> ReasonerStatus:
+        """Store a Groq key and switch the cloud path on.
+
+        The key is written to its own file rather than into Settings, and the
+        response says only whether it worked plus the last four characters.
+        There is deliberately no route that returns it.
+        """
+        credentials.save_key(request.api_key)
+        client = GroqClient(api_key=request.api_key)
+        reachable = await client.refresh_models()
+        if not reachable:
+            credentials.clear_key()
+            agent.reasoner.set_cloud(None)
+            raise HTTPException(
+                400,
+                "That key did not work. Groq refused it or could not be reached. "
+                "Nothing was saved.",
+            )
+        agent.reasoner.set_cloud(client)
+        agent._log(
+            f"Cloud model enabled: {client.resolve_model()}. "
+            f"Readings will be sent to Groq when it is used.",
+            level="warn",
+        )
+        return _cloud_status("Cloud model enabled.")
+
+    @router.delete("/reasoner/key", response_model=ReasonerStatus)
+    async def clear_key() -> ReasonerStatus:
+        credentials.clear_key()
+        agent.reasoner.set_cloud(None)
+        agent._log("Cloud model switched off. Nothing leaves this machine again.")
+        return _cloud_status("Cloud model switched off and the key deleted.")
+
+    # -- describing a problem in words -------------------------------------
+
+    @router.post("/chat", response_model=ChatReply)
+    async def chat(request: ChatRequest) -> ChatReply:
+        """Diagnose from a description rather than from a detector.
+
+        The detectors find what they were written to find. A person sitting in
+        front of a broken machine knows things no collector reads: that it began
+        after an update, that it only happens on one monitor, that the sound
+        works in one app and not another. This is the way in for that.
+
+        It does not bypass anything. The description becomes context on a
+        diagnosis that goes through the same reasoner, the same guardrail and
+        the same approval gate as one a detector opened.
+        """
+        symptom = Symptom(
+            code="USER.DESCRIBED",
+            severity=Severity.WARN,
+            title=request.message.strip()[:120],
+            detail=request.message.strip(),
+            detector="user",
+            facts={"described": request.message.strip()},
+        )
+        try:
+            incident = await agent.describe(symptom, note=request.message)
+        except RuntimeError as exc:
+            return ChatReply(reply=str(exc), detail="no reasoner available")
+        summary = incident.diagnosis.summary if incident.diagnosis else ""
+        return ChatReply(incident_id=incident.id, reply=summary)
+
+    @router.post("/incidents/{incident_id}/approve-composed", response_model=Incident)
+    async def approve_composed(incident_id: str) -> Incident:
+        """Run a command the cloud model wrote, having been approved.
+
+        A separate route from ``approve`` on purpose. The two do genuinely
+        different things with genuinely different guarantees, and one endpoint
+        that silently branched on which field was populated would be the sort of
+        convenience that hides the distinction the whole design rests on.
+        """
+        try:
+            return await agent.approve_composed(incident_id)
+        except KeyError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
 
     @router.get("/settings", response_model=Settings)
     async def get_settings() -> Settings:
