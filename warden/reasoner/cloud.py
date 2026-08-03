@@ -71,6 +71,46 @@ FALLBACK_MODELS = (
 )
 
 
+def _rate_limited(response: httpx.Response) -> str:
+    """Say how long, and say which limit, because both are actionable.
+
+    "Try again shortly" is the kind of message this project exists to argue
+    against: it is a shrug wearing a sentence. Groq answers a 429 with
+    `retry-after` and with headers naming which budget was spent, and a person
+    deciding whether to wait ten seconds or switch to the local model needs
+    exactly that.
+
+    The free tier's limit is tokens per minute rather than requests, which is
+    surprising: the account can have 999 of 1000 requests left and still be
+    refused. Naming the budget stops that reading as a bug in Warden.
+    """
+    try:
+        seconds = float(response.headers.get("retry-after", "0"))
+    except ValueError:
+        seconds = 0.0
+
+    # The length of the wait is what distinguishes the two limits, and it is the
+    # only reliable signal: the per-minute headers describe the per-minute
+    # bucket, so on a spent daily quota they read as full and say nothing about
+    # why the request was refused. Measured -- a 36-token call succeeded with
+    # 11,954 tokens remaining while a 3,000-token one was refused for 2,136
+    # seconds. An earlier version of this message read those headers, found the
+    # minute bucket full, and called it "too frequent", which was wrong.
+    if seconds >= 120:
+        minutes = round(seconds / 60)
+        return (
+            f"Groq's free daily allowance for this key is used up. It comes back in "
+            f"about {minutes} minutes, and until then diagnoses will use whatever "
+            f"runs on this machine. Nothing is broken and nothing needs fixing."
+        )
+    if seconds > 0:
+        return (
+            f"Groq is limiting how much text this key may send per minute. "
+            f"It clears in about {seconds:.0f}s."
+        )
+    return "Groq refused this request as too frequent, without saying for how long."
+
+
 class ComposedCommand(BaseModel):
     """A command the model wrote, rather than one Warden reviewed.
 
@@ -255,7 +295,14 @@ class GroqClient:
         body = {
             "model": model,
             "temperature": 0.2,
-            "max_completion_tokens": 1400,
+            # Reserved against the rate limit whether or not it is used, which
+            # is the part that is easy to miss. Groq's free tier allows 12,000
+            # tokens a minute and counts prompt + this number, so 1400 made a
+            # single diagnosis cost about 4,350 and capped the tier at under
+            # three questions a minute -- half that once the retry loop takes
+            # its second call. Measured replies run 400 to 600 tokens, so 900
+            # leaves generous headroom and buys back a call a minute.
+            "max_completion_tokens": 900,
             # Groq's json_object mode. The schema itself is carried in the
             # prompt rather than as a grammar, because Groq's strict structured
             # mode rejects the $defs and maxLength that Pydantic emits. So the
@@ -277,7 +324,7 @@ class GroqClient:
                 if response.status_code == 401:
                     raise LlmUnavailable("the cloud key was rejected; check it on the Model page")
                 if response.status_code == 429:
-                    raise LlmUnavailable("the cloud model is rate limited; try again shortly")
+                    raise LlmUnavailable(_rate_limited(response))
                 response.raise_for_status()
                 payload = response.json()
         except httpx.TimeoutException as exc:

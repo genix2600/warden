@@ -139,12 +139,35 @@ def _format_actions(
         playbook = registry.get(action_id)
         properties = playbook.params_model.model_json_schema().get("properties", {})
         params = ", ".join(properties) or "none"
+        admin = ", needs administrator" if playbook.requires_admin else ""
+
+        if described:
+            # A shortlist gets the full entry; the whole registry does not.
+            #
+            # Seventeen full entries cost about 4,500 characters, which took one
+            # cloud call to roughly 3,600 tokens -- and Groq's free tier allows
+            # 12,000 tokens a minute, so three questions in a minute began
+            # failing with a rate limit. Measured after this listing was added,
+            # not predicted.
+            #
+            # What is dropped is what the model does not need in order to
+            # *choose*: the verification predicate is Warden's business, and the
+            # risk tier is re-derived from the playbook once an id is picked.
+            # What stays is the id, what it does, and when to use it, because
+            # choosing between seventeen options is exactly what "use it when"
+            # is for.
+            blocks.append(
+                f"  {index}. {playbook.id} -- {playbook.summary}\n"
+                f"     use when: {playbook.when_to_use}"
+                f"{chr(10) + '     parameters: ' + params if properties else ''}"
+            )
+            continue
+
         blocks.append(
             f"  {index}. id: {playbook.id}\n"
             f"     what it does: {playbook.summary}\n"
             f"     use it when: {playbook.when_to_use}\n"
-            f"     risk: {playbook.risk.value}"
-            f"{', needs administrator' if playbook.requires_admin else ''}\n"
+            f"     risk: {playbook.risk.value}{admin}\n"
             f"     parameters: {params}\n"
             f"     proof it worked: {playbook.verify.predicate.describe}"
         )

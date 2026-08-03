@@ -10,13 +10,15 @@ from __future__ import annotations
 
 import inspect
 
+import httpx
+
 from warden import credentials
 from warden.contracts import utcnow
 from warden.contracts.state import ReasonerHealth
 from warden.executor.freeform import FreeformExecutor
 from warden.orchestrator.agent import _startup_reasoner_line
 from warden.reasoner import Reasoner
-from warden.reasoner.cloud import GroqClient
+from warden.reasoner.cloud import GroqClient, _rate_limited
 
 
 class TestKeyStorage:
@@ -239,3 +241,42 @@ class TestStartupSaysWhichBrainItHas:
         text, level = _startup_reasoner_line(None, None)
         assert text == "No local model found. Diagnoses will use the built-in rules engine."
         assert level == "warn"
+
+
+class TestRateLimitMessagesNameTheRightLimit:
+    """Measured, and the first version of this message got it wrong.
+
+    Groq's per-minute headers describe the per-minute bucket, so when the daily
+    allowance is spent they read as full and say nothing about the refusal. A
+    36-token call succeeded with 11,954 tokens remaining while a 3,000-token one
+    was refused with `retry-after: 2136`. Reading the headers therefore produced
+    "too frequent", which was false and unactionable.
+
+    The length of the wait is the reliable signal.
+    """
+
+    @staticmethod
+    def _response(retry_after: str | None, remaining: str = "11954") -> httpx.Response:
+        headers = {"x-ratelimit-remaining-tokens": remaining}
+        if retry_after is not None:
+            headers["retry-after"] = retry_after
+        return httpx.Response(429, headers=headers)
+
+    def test_a_long_wait_is_reported_as_the_daily_allowance(self) -> None:
+        text = _rate_limited(self._response("2136"))
+        assert "daily allowance" in text
+        assert "36 minutes" in text
+        assert "Nothing is broken" in text
+
+    def test_a_short_wait_is_reported_as_a_per_minute_limit(self) -> None:
+        text = _rate_limited(self._response("18"))
+        assert "per minute" in text
+        assert "18s" in text
+        assert "daily" not in text
+
+    def test_no_header_says_so_rather_than_inventing_a_duration(self) -> None:
+        text = _rate_limited(self._response(None))
+        assert "without saying for how long" in text
+
+    def test_an_unparseable_header_does_not_raise(self) -> None:
+        assert _rate_limited(self._response("soon")) != ""
