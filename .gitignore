@@ -52,3 +52,6 @@ desktop.ini
 # for us rather than for anyone evaluating the product.
 WARDEN-TEAM-BRIEF.txt
 WARDEN-PITCH.txt
+
+# Round-two slide content, written against a specific build.
+WARDEN-DECK.md

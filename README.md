@@ -4,7 +4,7 @@
 
 `v1.0.0` · Windows 10 and 11, x64 · 364 tests · runs on your own machine by default
 
-[Website](https://warden-genix2600s-projects.vercel.app) · [Download](https://github.com/genix2600/warden/releases/latest) · [Architecture](ARCHITECTURE.md) · [Measurements](docs/calibration.md)
+[Website](https://wardensys.vercel.app) · [Download](https://github.com/genix2600/warden/releases/latest) · [Architecture](ARCHITECTURE.md) · [Measurements](docs/calibration.md)
 
 ---
 
