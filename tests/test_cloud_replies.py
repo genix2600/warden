@@ -377,3 +377,132 @@ class TestCitationsArrivingAsProse:
             ]
         )
         assert d.hypotheses[0].supporting == ["abc123"]
+
+
+class FakeCloud:
+    """A cloud client that answers from a script, and records what it was asked.
+
+    The prompts matter as much as the replies here: the point of the retry is
+    that the second call is told why the first was refused.
+    """
+
+    def __init__(self, *replies: CloudDecision) -> None:
+        self._replies = list(replies)
+        self.prompts: list[str] = []
+        self.available = True
+
+    async def refresh_models(self) -> None:  # pragma: no cover - never reached
+        raise AssertionError("available is already True")
+
+    async def decide(self, system: str, user: str) -> tuple[CloudDecision, str, int]:
+        self.prompts.append(user)
+        return self._replies.pop(0), "llama-3.3-70b-versatile", 100
+
+
+def command(argv: list[str], **overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "argv": argv,
+        "explain": "restart the service",
+        "changes": "the service restarts",
+        "reversible": True,
+        "undo": "start it again",
+        "check": "see whether Bluetooth reconnects",
+        "requires_admin": True,
+        "risk": "reversible",
+    }
+    payload.update(overrides)
+    return payload
+
+
+class TestARefusalIsFeedbackNotAnEnding:
+    """Measured live, and the reason this loop exists.
+
+    Asked "bluetooth isn't working", the model wrote a command, the screen
+    refused it, and the incident closed as unresolved with a crossed-out
+    command on screen and no next step. The diagnosis had been fine; only the
+    command's form was rejected. Ending there produces exactly the useless
+    non-answer this product was built to replace, reached from the other side.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_second_attempt_is_told_why_the_first_failed(
+        self, wifi_symptom
+    ) -> None:
+        from warden.reasoner import Reasoner
+
+        refused = decision(command=command(["powershell", "-ec", "SQBFAFgA"]))
+        accepted = decision(
+            command=command(["powershell", "-Command", "Restart-Service bthserv"])
+        )
+        cloud = FakeCloud(refused, accepted)
+
+        reasoner = Reasoner(use_llm=False)
+        reasoner.set_cloud(cloud)  # type: ignore[arg-type]
+        result = await reasoner.diagnose([wifi_symptom], ObservationStore())
+
+        assert len(cloud.prompts) == 2
+        assert "REFUSED BEFORE THE USER SAW IT" in cloud.prompts[1]
+        assert "base64" in cloud.prompts[1]
+        assert "-ec" in cloud.prompts[1]
+
+        assert result.composed is not None
+        assert result.composed.refused is None
+        assert result.verdict is Verdict.ACTIONABLE
+
+    @pytest.mark.asyncio
+    async def test_the_first_refusal_is_still_shown(self, wifi_symptom) -> None:
+        """The user is told the model's first answer was thrown away. Silently
+        retrying until something passes is how a guardrail becomes decorative."""
+        from warden.reasoner import Reasoner
+
+        cloud = FakeCloud(
+            decision(command=command(["powershell", "-ec", "SQBFAFgA"])),
+            decision(command=command(["powershell", "-Command", "Restart-Service bthserv"])),
+        )
+        reasoner = Reasoner(use_llm=False)
+        reasoner.set_cloud(cloud)  # type: ignore[arg-type]
+        result = await reasoner.diagnose([wifi_symptom], ObservationStore())
+
+        assert any(
+            "refused the model's first command" in r
+            for r in result.reasoner.guardrail_rejections
+        )
+
+    @pytest.mark.asyncio
+    async def test_it_retries_once_and_then_stops(self, wifi_symptom) -> None:
+        """Not a loop. A second refusal is an answer: this cannot be written in a
+        form Warden will run, and saying so beats spending someone's rate limit
+        on a demonstration day."""
+        from warden.reasoner import Reasoner
+
+        cloud = FakeCloud(
+            decision(command=command(["vssadmin", "delete", "shadows"])),
+            decision(command=command(["diskpart", "/s", "x.txt"])),
+        )
+        reasoner = Reasoner(use_llm=False)
+        reasoner.set_cloud(cloud)  # type: ignore[arg-type]
+        result = await reasoner.diagnose([wifi_symptom], ObservationStore())
+
+        assert len(cloud.prompts) == 2
+        assert result.composed is not None
+        assert result.composed.refused is not None
+        assert result.verdict is Verdict.NEEDS_MORE_DATA
+
+    @pytest.mark.asyncio
+    async def test_a_reviewed_action_on_the_retry_still_wins(self, wifi_symptom) -> None:
+        """Being told "that command was refused" is the prompt most likely to
+        make a model look harder at the reviewed list. When it does, the answer
+        has to go through the grounding guardrail, not the refusal list."""
+        from warden.reasoner import Reasoner
+
+        cloud = FakeCloud(
+            decision(command=command(["powershell", "-ec", "SQBFAFgA"])),
+            decision(action_id="net.wifi.scan", params={}),
+        )
+        reasoner = Reasoner(use_llm=False)
+        reasoner.set_cloud(cloud)  # type: ignore[arg-type]
+        result = await reasoner.diagnose([wifi_symptom], ObservationStore())
+
+        assert result.composed is None
+        assert result.proposal is not None
+        assert result.proposal.action_id == "net.wifi.scan"

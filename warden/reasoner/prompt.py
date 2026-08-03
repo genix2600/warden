@@ -152,6 +152,7 @@ def build_user_prompt(
     exclude: frozenset[str] = frozenset(),
     note: str = "",
     may_compose: bool = False,
+    refused: tuple[list[str], str] | None = None,
     extra_sources: tuple[str, ...] = (
         "sys.cpu.percent",
         "sys.memory",
@@ -177,6 +178,22 @@ def build_user_prompt(
         else ""
     )
 
+    # Kept separate from `note`, which is framed to the model as the user's own
+    # words. A refusal is Warden speaking, and attributing it to the user would
+    # be a small lie in a prompt whose whole subject is not making things up.
+    rejected = (
+        "\nYOUR PREVIOUS ANSWER WAS REFUSED BEFORE THE USER SAW IT\n"
+        f"  You wrote: {' '.join(refused[0])}\n"
+        f"  Warden refused it: {refused[1]}\n"
+        "  This was a refusal of the command's form, not of your diagnosis, which\n"
+        "  may well be right. Write the same fix in a form that survives the\n"
+        "  check, or if it genuinely cannot be written that way, set\n"
+        '  "needs_more_data" and say why in "reply". Do not repeat the refused\n'
+        "  command.\n"
+        if refused is not None
+        else ""
+    )
+
     return f"""\
 MACHINE
   {host["os"]} (build {host["version"]}), {host["machine"]}
@@ -197,7 +214,7 @@ EVIDENCE THE DETECTOR CITED
 
 OTHER CURRENT READINGS
 {_format_evidence(context)}
-{described}{already_tried}
+{described}{already_tried}{rejected}
 ACTIONS YOU MAY CHOOSE FROM
 {_format_actions(symptom, registry, exclude, may_compose)}
 
@@ -247,9 +264,19 @@ CHOOSING WHAT TO DO
 WRITING A COMMAND
 
 - Give it as an argument list, not a string. ["netsh", "int", "ip", "reset"], \
-  never "netsh int ip reset". There is no shell.
-- Do not wrap it in cmd /c or powershell -Command. That hides the real command \
-  from the checks and from the person approving it, and it will be refused.
+  never "netsh int ip reset". Warden runs the list directly, with no shell to \
+  split it for you, so each argument must be its own element.
+- For a PowerShell cmdlet, which has no executable to invoke, use exactly this \
+  shape and put the whole cmdlet in the final element: \
+  ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", \
+  "Restart-Service bthserv"]. That is how Warden's own reviewed actions are \
+  written.
+- Whatever you write has to be readable by the person approving it. Never \
+  base64-encode it, never build it at runtime with Invoke-Expression or \
+  [scriptblock]::Create, and never start a second interpreter inside the first. \
+  Those are refused, and a justification will not change that.
+- At most three statements, separated by semicolons, and prefer one. If a fix \
+  needs more, it is a sequence of separate fixes: write the first step only.
 - Prefer commands that are reversible, and say how to reverse them in "undo".
 - "changes" must say what will actually be different afterwards. If it only \
   reads, say so and set risk to "reads_only".

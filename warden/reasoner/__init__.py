@@ -188,11 +188,68 @@ class Reasoner:
             ),
         )
 
-        # A reviewed action always wins. It is grounded against what was
-        # actually observed, it declares a predicate that will decide whether it
-        # worked, and it is reversible. None of that is true of a command
-        # written a second ago, so a model that offers both gets the better one
-        # taken and the other discarded.
+        diagnosis = self._settle(decision, symptom, store, exclude, model, latency_ms)
+        if diagnosis.composed is None or diagnosis.composed.refused is None:
+            return diagnosis
+
+        # A refusal used to end the incident. That is the wrong shape for what a
+        # refusal actually is: Warden has rejected the *form* of the command, and
+        # it has not disputed the diagnosis behind it. Closing there left the
+        # user with a correct explanation, a crossed-out command and no next
+        # step -- which is the "useless non-answer" this product exists to
+        # replace, arrived at from the other direction.
+        #
+        # So the refusal goes back to the model as the feedback it is. Once,
+        # not in a loop: if the second attempt is refused too, the answer is
+        # that this cannot be written safely, and saying so is honest. A retry
+        # loop against a hosted model is also a way to spend someone's rate
+        # limit on a demonstration day.
+        refused_argv = list(diagnosis.composed.argv)
+        refused_why = diagnosis.composed.refused
+        retry, model, retry_latency = await self._cloud.decide(
+            CLOUD_SYSTEM_PROMPT,
+            build_user_prompt(
+                symptom,
+                store,
+                self._registry,
+                exclude,
+                note,
+                may_compose=True,
+                refused=(refused_argv, refused_why),
+            ),
+        )
+        second = self._settle(
+            retry, symptom, store, exclude, model, latency_ms + retry_latency
+        )
+        second.reasoner.guardrail_rejections.insert(
+            0,
+            f"Warden refused the model's first command ({' '.join(refused_argv)}): "
+            f"{refused_why} It was asked again with that reason.",
+        )
+        return second
+
+    def _settle(
+        self,
+        decision: object,
+        symptom: Symptom,
+        store: ObservationStore,
+        exclude: frozenset[str],
+        model: str,
+        latency_ms: int,
+    ) -> Diagnosis:
+        """Turn one cloud reply into a Diagnosis by whichever route it earned.
+
+        A reviewed action always wins. It is grounded against what was actually
+        observed, it declares a predicate that will decide whether it worked,
+        and it is reversible. None of that is true of a command written a second
+        ago, so a model that offers both gets the better one taken and the other
+        discarded -- and that has to stay true on the retry as well, since being
+        told "that command was refused" is exactly the prompt most likely to
+        make a model look harder at the reviewed list.
+        """
+        from warden.reasoner.cloud import CloudDecision
+
+        assert isinstance(decision, CloudDecision)
         if decision.action_id:
             diagnosis = validate(
                 decision,
@@ -207,7 +264,6 @@ class Reasoner:
                 update={"mode": ReasonerMode.CLOUD}
             )
             return diagnosis
-
         return build_composed_diagnosis(decision, symptom, model, latency_ms)
 
 

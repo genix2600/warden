@@ -19,10 +19,15 @@ in kind:
    approve button, because a good enough explanation next to a bad enough
    command is exactly how this goes wrong.
 
-2. **No shell, ever.** Same rule as the reviewed path: an argument list, never a
-   string, ``shell=False``. A model that wants a pipeline has to be told no.
-   This also means the refusal list cannot be defeated by quoting tricks, since
-   there is no shell to interpret them.
+2. **Readable, rather than uninterpreted.** Same rule as the reviewed path: an
+   argument list, never a string, ``shell=False``, so the refusal list cannot be
+   defeated by quoting tricks. That is not the same as banning interpreters, and
+   an earlier version of this file confused the two -- refusing every
+   ``powershell -Command``, which is precisely how all seventeen reviewed
+   actions are written, because most of what fixes Windows is a cmdlet rather
+   than an executable. The test that survives is whether the person clicking
+   approve can read what will run: a cmdlet written out passes, a base64 payload
+   or a script that assembles itself does not.
 
 3. **Approval that cannot be defaulted.** ``approved_at`` is keyword-only with
    no default, exactly as in the reviewed runner, so forgetting it is a type
@@ -164,21 +169,12 @@ def screen(argv: list[str]) -> str | None:
         if pattern.search(joined):
             return reason
 
-    # A shell invoked with an inline command string reintroduces everything the
-    # argv-only rule exists to remove, so it is refused as a shape rather than
-    # for anything it happens to contain.
-    if program in {"cmd", "powershell", "pwsh"} and _opens_a_shell(argv[1:]):
-        return (
-            "a command that opens a shell to run another command hides the real "
-            "command from this check. Ask for the underlying command instead."
-        )
+    if program in {"cmd", "powershell", "pwsh"}:
+        return _screen_interpreter(argv[1:])
     return None
 
 
-#: PowerShell switches that hand it code rather than a path.
-_INLINE_SWITCHES = ("command", "encodedcommand")
-
-#: Documented short forms that are *not* prefixes of the full name.
+#: Published short forms for ``-EncodedCommand`` that are *not* prefixes of it.
 #:
 #: This set exists because prefix matching alone is not how PowerShell resolves
 #: parameters, and assuming it was left a hole. ``-ec`` is the published alias
@@ -186,30 +182,110 @@ _INLINE_SWITCHES = ("command", "encodedcommand")
 #: so a rule built purely on prefixes let ``powershell -ec <base64>`` through --
 #: the single most useful thing to smuggle past a check whose whole purpose is
 #: that the person approving can read what will run.
-_INLINE_ALIASES = frozenset({"ec", "ec:", "c", "k"})
+_ENCODED_ALIASES = frozenset({"ec", "ec:"})
+
+#: Switches after which the remaining arguments are code, not parameters.
+_INLINE_SWITCHES = frozenset({"c", "k", "command", "/c", "/k"})
+
+#: Things that can appear inside an inline script and make it unreadable.
+#:
+#: The distinction this whole check now turns on is *opacity*, not
+#: interpretation. A script that says what it does can be read by the person
+#: approving it; one that assembles itself at runtime cannot, and no amount of
+#: staring at the argv will reveal what it is going to do.
+_OPAQUE_SCRIPT: tuple[tuple[re.Pattern[str], str], ...] = (
+    (
+        re.compile(r"\[\s*scriptblock\s*\]\s*::\s*create|\biex\b|invoke-expression"),
+        "this command builds another command at runtime, so what would actually "
+        "run cannot be read before approving it",
+    ),
+    (
+        re.compile(r"frombase64string|\[convert\]\s*::\s*from"),
+        "this command decodes its real contents at runtime, which hides them "
+        "from the person approving it",
+    ),
+    (
+        re.compile(r"\b(?:cmd|powershell|pwsh)(?:\.exe)?\s+[-/](?:c|k|e|en|enc|ec|command)\b"),
+        "this command starts a second interpreter, which puts the real work one "
+        "level further away from the person reading it",
+    ),
+)
+
+#: How many statements may share one command before it stops being a command.
+#:
+#: Three covers the fixes that genuinely need a sequence -- stop a service,
+#: clear its state, start it again -- and stops short of a script, where the
+#: consequential line can sit in the middle and be skimmed past.
+_MAX_STATEMENTS = 3
 
 
-def _opens_a_shell(args: list[str]) -> bool:
-    """Whether these arguments hand an interpreter code to run.
+def _screen_interpreter(args: list[str]) -> str | None:
+    """Why this interpreter invocation is refused, or None if it may be offered.
 
-    Two rules, because PowerShell resolves parameters two ways. Any unambiguous
-    **prefix** of a parameter name works, so ``-e``, ``-enc`` and ``-encodedcomm``
-    all reach ``-EncodedCommand``. And a handful of published **aliases** work
-    that are not prefixes at all, which is where ``-ec`` lives.
+    The rule here used to be "an interpreter with an inline command string is
+    refused, as a shape". That was wrong in a way that only showed up against a
+    real model: **it refused the exact shape Warden itself ships.** Every one of
+    the seventeen reviewed actions renders as ``powershell.exe -NoProfile
+    -NonInteractive -ExecutionPolicy Bypass -Command <script>``, because most of
+    what fixes Windows is a cmdlet and a cmdlet has no executable to invoke.
+    ``Restart-Service`` is not a program. There is no ``restart-service.exe``.
 
-    ``-File`` is deliberately absent from both lists. A script on disk is
-    something the user can open and read before approving, which is exactly the
-    property this check protects; inline code is not.
+    So the old rule did not raise the bar, it removed the feature: asked about
+    Bluetooth, the model correctly wrote ``Restart-Service bthserv``, and Warden
+    refused it with the sentence "a command that opens a shell to run another
+    command hides the real command from this check" -- which was also simply
+    untrue. Nothing was hidden. The script was right there in the argv, fully
+    readable, and already screened by every pattern above.
+
+    What actually matters is whether the person clicking approve can see what
+    will run. That fails for encoded payloads and for scripts that assemble
+    themselves, and it does not fail for a cmdlet written out in the open. This
+    checks for the former and permits the latter.
+
+    ``-File`` needs no check at all: a script on disk is something the user can
+    open and read, which is the property being protected.
     """
-    for raw in args:
-        token = raw.lstrip("-/").lower()
+    index = 0
+    while index < len(args):
+        token = args[index].lstrip("-/").lower()
+        index += 1
         if not token:
             continue
-        if token in _INLINE_ALIASES:
-            return True
-        if any(switch.startswith(token) for switch in _INLINE_SWITCHES):
-            return True
-    return False
+
+        # Encoded, under any of the several spellings that reach it. Refused
+        # outright: base64 is not something a person can read at an approval
+        # prompt, whatever it decodes to.
+        if token in _ENCODED_ALIASES or "encodedcommand".startswith(token):
+            return (
+                "this command is base64-encoded, so the person approving it cannot "
+                "read what it does. Ask for it in plain text instead."
+            )
+
+        if token in _INLINE_SWITCHES or (token and "command".startswith(token)):
+            # PowerShell treats everything after -Command as the script.
+            return _hides_its_work(" ".join(args[index:]))
+
+    return None
+
+
+def _hides_its_work(script: str) -> str | None:
+    """Why this inline script cannot be read at an approval prompt."""
+    if not script.strip():
+        return "the model asked for an interpreter but gave it nothing to run"
+
+    lowered = script.lower()
+    for pattern, reason in _OPAQUE_SCRIPT:
+        if pattern.search(lowered):
+            return reason
+
+    statements = [part for part in re.split(r";|\r?\n", script) if part.strip()]
+    if len(statements) > _MAX_STATEMENTS:
+        return (
+            f"this is a script of {len(statements)} statements rather than a "
+            f"command. Warden runs one fix at a time so that the line that "
+            f"matters cannot be skimmed past. Ask for the smallest step first."
+        )
+    return None
 
 
 class FreeformExecutor:
