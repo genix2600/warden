@@ -7,7 +7,19 @@
 [Website](https://wardensys.vercel.app) · [Download](https://github.com/genix2600/warden/releases/latest) · [Architecture](ARCHITECTURE.md) · [Measurements](docs/calibration.md)
 
 ---
+## What is Warden?
 
+Warden is an AI-powered Windows troubleshooting application.
+
+Unlike chatbots that cannot inspect your computer or "PC optimizer" tools that make unverifiable claims, Warden:
+
+- Reads live Windows telemetry
+- Diagnoses issues using deterministic rules and AI
+- Asks before making changes
+- Verifies whether each fix actually worked
+- Escalates when software cannot solve the problem
+
+  
 ## The problem
 
 Three kinds of tool exist to help when a computer misbehaves, and each fails in
@@ -429,13 +441,15 @@ single laptop. Behaviour on other silicon is reasoned about, not tested.
 
 ## Team
 
-Built for ShriTeq 2026.
+Built for **ShriTeq 2026**.
 
-- **Aaryaman Vaidya** (technical lead)
-- **Abhav Jain** (debugger)
-- **Annem Saad** (tester)
-- **Avyukt Chhabra** (front-end developer)
-- **Viti Mehra** (presentation lead)
+| Member | Role |
+| :------ | :--- |
+| **Aaryaman Vaidya** | Technical Lead |
+| **Abhav Jain** | Debugger |
+| **Annem Saad** | Tester |
+| **Avyukt Chhabra** | Front-End Developer |
+| **Viti Mehra** | Presentation Lead |
 
 ---
 
