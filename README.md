@@ -2,7 +2,7 @@
 
 **An agentic Windows diagnostician that reads your machine, shows you the evidence, and runs nothing without your say-so.**
 
-`v1.0.0` · Windows 10 and 11, x64 · 413 tests · runs on your own machine by default
+`v1.9.0` · Windows 10 and 11, x64 · 413 tests · runs on your own machine by default
 
 [Website](https://wardensys.vercel.app) · [Download](https://github.com/genix2600/warden/releases/latest) · [Architecture](ARCHITECTURE.md) · [Measurements](docs/calibration.md)
 
@@ -216,7 +216,7 @@ checks whether it is already done.
 
 ```powershell
 .\scripts\fetch-model.ps1 -RuntimeOnly   # stages ollama.exe, no weights
-.\scripts\build-installer.ps1            # dist\Warden-Setup-1.0.0.exe
+.\scripts\build-installer.ps1            # dist\Warden-Setup-1.9.0.exe
 ```
 
 Drop `-RuntimeOnly`, then pass `-Offline` to `build-installer.ps1`, to build the

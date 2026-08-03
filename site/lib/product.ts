@@ -11,7 +11,7 @@
  */
 
 export const REPO = "https://github.com/genix2600/warden";
-export const VERSION = "1.0.0";
+export const VERSION = "1.9.0";
 
 /** GitHub Releases, because the installer is far past the 100 MB file limit
  *  that GitHub and Vercel both enforce. `/latest/` means the site never needs

@@ -239,7 +239,7 @@ def create_app(
 
     app = FastAPI(
         title="Warden",
-        version="1.0.0",
+        version="1.9.0",
         summary="An agentic Windows diagnostician that shows its evidence and asks first.",
         lifespan=lifespan,
     )
