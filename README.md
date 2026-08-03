@@ -432,10 +432,10 @@ single laptop. Behaviour on other silicon is reasoned about, not tested.
 Built for ShriTeq 2026.
 
 - **Aaryaman Vaidya** (technical lead)
-- **Abhav Jain**
-- **Annem Saad**
-- **Avyukt Chhabra**
-- **Viti Mehra**
+- **Abhav Jain** (debugger)
+- **Annem Saad** (tester)
+- **Avyukt Chhabra** (front-end developer)
+- **Viti Mehra** (presentation lead)
 
 ---
 
