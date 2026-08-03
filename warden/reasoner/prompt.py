@@ -22,7 +22,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from warden.contracts import ExecutionRecord, Observation, Symptom
-from warden.playbooks import CANDIDATES, PlaybookRegistry
+from warden.playbooks import CANDIDATES, PlaybookRegistry, candidate_actions
 from warden.store import ObservationStore
 from warden.winenv import describe_host
 
@@ -95,16 +95,25 @@ def _format_actions(
     message is exactly right and stays right for both models: no command helps,
     the verdict is ``needs_service``.
 
-    A code **absent from** ``CANDIDATES`` is simply one nobody wrote a playbook
-    for, which is every problem a user types in their own words. Telling a cloud
-    model "the registry has been reviewed and contains no command that can fix
-    this, the correct verdict is needs_service" is then a flat instruction to
-    give up -- and it obeyed. Measured: a broken search index, a muted audio
-    device and an offline printer all came back as "contact a technician",
-    because the user prompt contradicted the system prompt and the more specific
-    one won. That is the whole reason the cloud path looked useless.
+    A code **absent from** ``CANDIDATES`` is simply one no detector raises, which
+    is every problem a user types in their own words. Telling a cloud model "the
+    registry has been reviewed and contains no command that can fix this, the
+    correct verdict is needs_service" was a flat instruction to give up -- and it
+    obeyed. Measured: a broken search index, a muted audio device and an offline
+    printer all came back as "contact a technician", because the user prompt
+    contradicted the system prompt and the more specific one won.
+
+    Saying "no reviewed action covers this" instead was better but still false.
+    There is no *shortlist* for a described problem; there is still a registry,
+    and it frequently contains exactly the right fix. Measured again, once the
+    composing path worked: asked about a wrong clock the model wrote
+    ``Set-Date -Date (Get-Date)``, which sets the clock to the time it already
+    is, while ``time.resync`` sat unoffered with a predicate that would have
+    proved whether it worked. So a described problem now sees the whole registry,
+    with the preamble below explaining why picking one beats writing one.
     """
-    candidates = tuple(a for a in CANDIDATES.get(symptom.code, ()) if a not in exclude)
+    candidates = candidate_actions(symptom.code, registry, exclude)
+    described = symptom.code not in CANDIDATES
     if not candidates:
         exhausted = (
             "\n\n  Every action for this symptom has already been tried and verified as\n"
@@ -112,13 +121,9 @@ def _format_actions(
             if exclude
             else ""
         )
-        deliberate = symptom.code in CANDIDATES
-        if may_compose and not deliberate:
+        if may_compose and described:
             return (
-                "  (no reviewed action covers this)\n\n"
-                "  This is the normal case for a problem described in words, and it is\n"
-                "  what you are here for. Warden's seventeen reviewed actions cover the\n"
-                "  faults its detectors can find; this is not one of them.\n\n"
+                "  (every reviewed action has already been tried here)\n\n"
                 "  Write a command in \"command\". Do NOT answer \"needs_service\" merely\n"
                 "  because the list is empty -- an empty list here means nobody wrote a\n"
                 "  playbook, not that the problem is physical." + exhausted
@@ -143,7 +148,22 @@ def _format_actions(
             f"     parameters: {params}\n"
             f"     proof it worked: {playbook.verify.predicate.describe}"
         )
-    return "\n\n".join(blocks)
+    listing = "\n\n".join(blocks)
+
+    if not described:
+        return listing
+
+    # A described problem is matched against the whole registry rather than a
+    # detector's shortlist, so the model has to be told that these are not all
+    # about its problem -- and told why picking one still beats writing one.
+    return (
+        "  These are every fix Warden has already reviewed. Most will be irrelevant\n"
+        "  to this problem; read the \"use it when\" line before choosing.\n\n"
+        "  If one of them fits, choose it by id and leave \"command\" null. A reviewed\n"
+        "  action was read by a person, is bound to real readings, declares a test\n"
+        "  that decides whether it worked, and can be undone. A command you write has\n"
+        "  none of those. Only write one when nothing here fits.\n\n" + listing
+    )
 
 
 #: How much of each stream the model is shown.

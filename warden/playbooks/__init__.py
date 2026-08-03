@@ -99,6 +99,45 @@ CANDIDATES: dict[str, tuple[str, ...]] = {
 }
 
 
+def candidate_actions(
+    symptom_code: str,
+    registry: PlaybookRegistry = REGISTRY,
+    exclude: frozenset[str] = frozenset(),
+) -> tuple[str, ...]:
+    """Which reviewed actions may be considered for this symptom code.
+
+    One function so that the prompt and the guardrail cannot disagree. The
+    prompt module's first principle is that the model sees exactly what the
+    guardrail will hold it to, and that only holds if both ask the same
+    question.
+
+    Three cases, and the third was missing:
+
+    * A code **mapped to actions** gets those actions. The ordinary path.
+    * A code **mapped to an empty tuple** gets nothing, deliberately. A worn
+      battery has no software fix and no model confidence may invent one.
+    * A code **absent from the map entirely** gets the whole registry.
+
+    That third case is every problem a user describes in their own words, and
+    it used to get nothing -- so the model composed a command from scratch even
+    when Warden already owned a reviewed one. Measured: asked about a wrong
+    clock it wrote `Set-Date -Date (Get-Date)`, which sets the clock to the time
+    it already is, while `time.resync` sat in the registry with a predicate that
+    proves whether it worked. Asked about Bluetooth, audio, the print spooler
+    and search, it wrote four service restarts that `sys.service.restart`
+    already covers, grounded and verifiable.
+
+    A reviewed action is better than a composed one on every axis that matters:
+    it was read by a person, it is bound to real readings, it declares a test
+    that decides whether it worked, and it can be undone. Offering the registry
+    here does not weaken the closed-registry guarantee -- the model still picks
+    an id it cannot invent, and the guardrail still checks it.
+    """
+    if symptom_code in CANDIDATES:
+        return tuple(a for a in CANDIDATES[symptom_code] if a not in exclude)
+    return tuple(a for a in registry.ids if a not in exclude)
+
+
 def _check_coverage() -> None:
     detectable = {code for d in build_default_detectors() for code in d.raises}
     unmapped = detectable - set(CANDIDATES)

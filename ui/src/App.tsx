@@ -10,7 +10,6 @@ import { Header } from "./components/Header";
 import { Sidebar } from "./components/Sidebar";
 import { Warming } from "./components/Warming";
 import { Ask } from "./pages/Ask";
-import { Capabilities } from "./pages/Capabilities";
 import { Evidence } from "./pages/Evidence";
 import { Health } from "./pages/Health";
 import { History } from "./pages/History";
@@ -112,7 +111,6 @@ export default function App() {
           {!warming && page === "ask" && <Ask onOpened={() => setPage("overview")} />}
           {!warming && page === "tuneup" && <TuneUp />}
           {!warming && page === "history" && <History incidents={incidents} />}
-          {!warming && page === "capabilities" && <Capabilities />}
           {!warming && page === "evidence" && (
             <Evidence telemetry={state.telemetry} onInspect={setInspecting} />
           )}

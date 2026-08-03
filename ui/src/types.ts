@@ -92,7 +92,6 @@ export type PageId =
   | "health"
   | "tuneup"
   | "history"
-  | "capabilities"
   | "evidence"
   | "model"
   | "settings"

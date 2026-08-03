@@ -108,6 +108,39 @@ class ComposedCommand(BaseModel):
         description="How much this disturbs the machine."
     )
 
+    @field_validator("reversible", "requires_admin", mode="before")
+    @classmethod
+    def _boolean(cls, value: object) -> object:
+        """Accept the several things a model says instead of true or false.
+
+        Measured: asked about an undetected second monitor, the model answered
+        ``"reversible": "N/A"``. Pydantic rejected the whole reply, the cloud
+        path raised, and Warden silently produced a rules-engine answer -- the
+        user paid for a hosted call, waited for it, and got the offline result
+        with nothing on screen to say why.
+
+        Ollama cannot do this. The local model is handed the schema as a
+        decoding grammar, so a boolean field physically cannot contain "N/A".
+        Groq's `json_object` mode guarantees only that the output parses, so
+        every constraint the local path gets for free is re-established here --
+        and this field was missed when the enums were done.
+
+        An unreadable answer resolves to ``False``, which is the cautious
+        reading for both fields it guards: not known to be reversible, and not
+        known to need administrator.
+        """
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            text = value.strip().lower()
+            if text in {"true", "yes", "y", "1"}:
+                return True
+            if text in {"false", "no", "n", "0", "n/a", "na", "unknown", "none", ""}:
+                return False
+        if isinstance(value, int | float):
+            return bool(value)
+        return False
+
     @field_validator("risk", mode="before")
     @classmethod
     def _risk(cls, value: object) -> object:

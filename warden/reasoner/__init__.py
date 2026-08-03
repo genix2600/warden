@@ -265,19 +265,32 @@ class Reasoner:
 
         assert isinstance(decision, CloudDecision)
         if decision.action_id:
-            diagnosis = validate(
-                decision,
-                symptom,
-                store,
-                self._registry,
-                model=model,
-                latency_ms=latency_ms,
-                exclude=exclude,
-            )
-            diagnosis.reasoner = diagnosis.reasoner.model_copy(
-                update={"mode": ReasonerMode.CLOUD}
-            )
-            return diagnosis
+            try:
+                diagnosis = validate(
+                    decision,
+                    symptom,
+                    store,
+                    self._registry,
+                    model=model,
+                    latency_ms=latency_ms,
+                    exclude=exclude,
+                )
+            except GuardrailRejection:
+                # A reviewed action can fail here for a reason that says nothing
+                # about the diagnosis: its grounding guard wants a reading that
+                # a described problem never produced, because no detector ran.
+                # Losing the whole reply over that would be a worse answer than
+                # the command the model also wrote, so fall through to it. With
+                # no command there is nothing to fall through to and the
+                # rejection stands.
+                if decision.command is None:
+                    raise
+                log.info("reviewed action did not ground; using the composed command")
+            else:
+                diagnosis.reasoner = diagnosis.reasoner.model_copy(
+                    update={"mode": ReasonerMode.CLOUD}
+                )
+                return diagnosis
         return build_composed_diagnosis(decision, symptom, model, latency_ms)
 
 

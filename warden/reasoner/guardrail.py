@@ -5,9 +5,13 @@ influence what runs on someone's computer. It assumes the model is capable,
 well-intentioned and occasionally wrong in ways that sound completely
 reasonable, and it checks accordingly:
 
-* the chosen action must be in the candidate set *for this symptom* -- not
-  merely somewhere in the registry, so a model cannot answer a full disk by
-  restarting the wireless adapter;
+* the chosen action must be in the candidate set *for this symptom* -- for a
+  symptom a detector raised, that is the mapped shortlist, so a model cannot
+  answer a full disk by restarting the wireless adapter. For a problem the user
+  described in words there is no shortlist to narrow to, so the candidate set is
+  the whole reviewed registry: still a closed list of ids the model cannot
+  invent, just a wider one. :func:`warden.playbooks.candidate_actions` decides,
+  and the prompt is built from the same call;
 * the parameters must survive the playbook's own grounding guard, so a model
   cannot invent a network name or a device path;
 * an ``actionable`` verdict for a symptom with no candidate actions is refused
@@ -35,7 +39,7 @@ from warden.contracts import (
     Symptom,
     Verdict,
 )
-from warden.playbooks import CANDIDATES, ActionRejected, PlaybookRegistry
+from warden.playbooks import ActionRejected, PlaybookRegistry, candidate_actions
 from warden.reasoner.llm import LlmDecision
 from warden.reasoner.rules import Draft, assemble
 from warden.store import ObservationStore
@@ -58,7 +62,7 @@ def validate(
     exclude: frozenset[str] = frozenset(),
 ) -> Diagnosis:
     rejections: list[str] = []
-    candidates = tuple(a for a in CANDIDATES.get(symptom.code, ()) if a not in exclude)
+    candidates = candidate_actions(symptom.code, registry, exclude)
 
     hypotheses = _clean_hypotheses(decision, store, rejections)
     if not hypotheses:

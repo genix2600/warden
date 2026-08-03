@@ -17,7 +17,6 @@ const NAV: { id: PageId; label: string; icon: string; hint: string }[] = [
   { id: "overview", label: "Now", icon: "home", hint: "What is happening right now" },
   { id: "ask", label: "Describe a problem", icon: "search", hint: "Tell Warden in your own words" },
   { id: "health", label: "Health", icon: "heart", hint: "Every part of the machine" },
-  { id: "capabilities", label: "What it can do", icon: "shield", hint: "The full action list" },
   { id: "tuneup", label: "Tune-up", icon: "gauge", hint: "Settings that are worth changing" },
   { id: "history", label: "History", icon: "history", hint: "What Warden has done" },
   { id: "evidence", label: "Readings", icon: "list", hint: "Everything Warden has read" },

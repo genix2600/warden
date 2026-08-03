@@ -48,6 +48,7 @@ from __future__ import annotations
 
 import logging
 import re
+import shutil
 import subprocess
 from datetime import datetime
 
@@ -171,7 +172,40 @@ def screen(argv: list[str]) -> str | None:
 
     if program in {"cmd", "powershell", "pwsh"}:
         return _screen_interpreter(argv[1:])
+
+    missing = _not_on_this_machine(argv[0])
+    if missing is not None:
+        return missing
     return None
+
+
+def _not_on_this_machine(program: str) -> str | None:
+    """Whether the executable exists at all, which is not the same as safe.
+
+    Every other check here asks whether a command should run. This one asks
+    whether it *can*, and it exists because a model will occasionally write a
+    command that has never existed. Measured, asked about Wi-Fi dropping out:
+    `netsh wlan reset networkstate`, which produces "The following command was
+    not found".
+
+    Refusing rather than warning, because the alternative is asking someone to
+    approve a command that cannot possibly work and then showing them a Windows
+    error they have no way to interpret. A refusal instead goes back to the
+    model with the reason, which is the loop that already exists.
+
+    Two honest limits. This checks the *program*, not its arguments, so the
+    measured `netsh wlan reset networkstate` still passes -- `netsh` is real.
+    And it cannot see PowerShell cmdlets, which are resolved by the interpreter
+    rather than by the filesystem. For both, the safety net is the same one a
+    wrong-but-real command gets: it fails, and its output goes back to the model.
+    """
+    if shutil.which(program) is not None:
+        return None
+    return (
+        f"{program!r} is not a program on this machine, so this command cannot "
+        f"run. Models occasionally write commands that have never existed, and "
+        f"running one only produces an error nobody can act on."
+    )
 
 
 #: Published short forms for ``-EncodedCommand`` that are *not* prefixes of it.

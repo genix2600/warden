@@ -276,14 +276,6 @@ function Refusals() {
           ))}
         </div>
 
-        <Reveal delay={240}>
-          <Link
-            href="/what-it-covers"
-            className="mt-5 inline-block text-[14px] font-medium text-series-1 hover:underline"
-          >
-            See all seven, and the seventeen it will do →
-          </Link>
-        </Reveal>
       </div>
     </section>
   );

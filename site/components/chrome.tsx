@@ -8,7 +8,6 @@ import { DOWNLOAD_URL, REPO } from "@/lib/product";
 
 const NAV = [
   { href: "/how-it-works", label: "How it works" },
-  { href: "/what-it-covers", label: "What it covers" },
   { href: "/security", label: "Security" },
   { href: "/pricing", label: "Pricing" },
   { href: "/faq", label: "FAQ" },
@@ -108,7 +107,6 @@ export function Footer() {
             title="Product"
             links={[
               { href: "/how-it-works", label: "How it works" },
-              { href: "/what-it-covers", label: "What it covers" },
               { href: "/download", label: "Download" },
               { href: "/pricing", label: "Pricing" },
             ]}

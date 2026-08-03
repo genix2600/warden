@@ -247,3 +247,28 @@ class TestACmdletIsNotAShell:
 
     def test_an_interpreter_given_nothing_to_run_is_refused(self) -> None:
         assert screen(["powershell", "-Command", "   "]) is not None
+
+
+class TestACommandThatCannotExist:
+    """Models occasionally write commands that have never existed.
+
+    Measured, asked about Wi-Fi dropping out: `netsh wlan reset networkstate`.
+    Running it produces "The following command was not found", which is an error
+    the user has no way to interpret and no way to act on.
+    """
+
+    def test_an_invented_program_is_refused(self) -> None:
+        refusal = screen(["notarealprogram", "--fix"])
+        assert refusal is not None
+        assert "not a program on this machine" in refusal
+
+    @pytest.mark.parametrize("argv", [["ipconfig", "/flushdns"], ["netsh", "int", "ip", "reset"]])
+    def test_real_programs_are_unaffected(self, argv: list[str]) -> None:
+        assert screen(argv) is None
+
+    def test_the_limit_is_stated_rather_than_papered_over(self) -> None:
+        """This checks the program, not its arguments, so the measured case that
+        prompted it still passes: `netsh` is real, `wlan reset networkstate` is
+        not. The safety net for that is the same one any wrong-but-real command
+        gets -- it fails, and its output goes back to the model."""
+        assert screen(["netsh", "wlan", "reset", "networkstate"]) is None

@@ -286,16 +286,28 @@ class TestEmptyActionListMeansTwoDifferentThings:
         text = build_user_prompt(wifi_symptom, ObservationStore(), REGISTRY)
         assert '"needs_service"' in text
 
-    def test_the_cloud_prompt_tells_it_to_write_one_instead(self, wifi_symptom) -> None:
-        """For a code nobody wrote a playbook for -- every problem typed in
-        words -- the old wording was a flat instruction to give up, and the
-        model obeyed it over the system prompt."""
+    def test_a_described_problem_is_offered_the_whole_registry(self, wifi_symptom) -> None:
+        """Measured, and the reason this changed. Asked about a wrong clock the
+        model wrote `Set-Date -Date (Get-Date)` -- which sets the clock to the
+        time it already is -- while `time.resync` sat in the registry unoffered,
+        with a predicate that would have proved whether it worked.
+
+        There is no shortlist for a problem typed in words. There is still a
+        registry, and it often holds exactly the right fix."""
         wifi_symptom.code = "USER.DESCRIBED"
         text = build_user_prompt(
             wifi_symptom, ObservationStore(), REGISTRY, may_compose=True
         )
-        assert "no reviewed action covers this" in text
-        assert "Do NOT answer" in text
+        assert "time.resync" in text
+        assert "sys.service.restart" in text
+        assert "Only write one when nothing here fits" in text
+
+    def test_a_detected_symptom_keeps_its_shortlist(self, wifi_symptom) -> None:
+        """Widening the described case must not widen the detected one, or a
+        model could answer a full disk by restarting the wireless adapter."""
+        text = build_user_prompt(wifi_symptom, ObservationStore(), REGISTRY)
+        assert "time.resync" not in text
+        assert "Only write one when nothing here fits" not in text
 
     def test_a_deliberate_refusal_is_not_overridden_by_may_compose(
         self, wifi_symptom
@@ -506,3 +518,62 @@ class TestARefusalIsFeedbackNotAnEnding:
         assert result.composed is None
         assert result.proposal is not None
         assert result.proposal.action_id == "net.wifi.scan"
+
+
+class TestNullsAndNonBooleans:
+    """Two more ways a real reply failed the schema, both measured.
+
+    Both are the same underlying asymmetry: Ollama gets the schema as a decoding
+    grammar and physically cannot emit an invalid value, while Groq's
+    `json_object` mode guarantees only that the output parses. Every constraint
+    the local path gets for free has to be re-established here, and the cost of
+    missing one is not a crash -- it is a silent fall back to the rules engine.
+    """
+
+    def test_explicit_nulls_are_treated_as_unanswered(self) -> None:
+        """Measured on a reply about DNS: five nulls in one object, all of them
+        for fields the model was right not to answer, and the whole reply was
+        rejected."""
+        d = CloudDecision.model_validate(
+            {
+                "summary": "dns is not resolving",
+                "hypotheses": [
+                    {"cause": "stale cache", "domain": "software",
+                     "likelihood": 0.7, "reasoning": "r"}
+                ],
+                "verdict": "actionable",
+                "action_id": "net.dns.flush",
+                "params": None,
+                "service_reason": None,
+                "service_who": None,
+                "service_next_step": None,
+                "interim_mitigation": None,
+            }
+        )
+        assert d.action_id == "net.dns.flush"
+        assert d.params == {}
+        assert d.service_reason == ""
+
+    def test_a_null_command_still_means_no_command(self) -> None:
+        d = decision(command=None)
+        assert d.command is None
+
+    @pytest.mark.parametrize(
+        ("given", "expected"),
+        [("true", True), ("Yes", True), ("false", False), ("N/A", False),
+         ("unknown", False), (1, True), (0, False)],
+    )
+    def test_booleans_arriving_as_words(self, given: object, expected: bool) -> None:
+        """Measured: `"reversible": "N/A"` on a reply about an undetected second
+        monitor. Unreadable resolves to False, the cautious reading for both
+        fields it guards."""
+        d = decision(
+            command={
+                "argv": ["ipconfig", "/all"],
+                "explain": "e", "changes": "c", "undo": "u", "check": "k",
+                "reversible": given, "requires_admin": given, "risk": "reads_only",
+            }
+        )
+        assert d.command is not None
+        assert d.command.reversible is expected
+        assert d.command.requires_admin is expected

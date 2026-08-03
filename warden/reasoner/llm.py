@@ -22,7 +22,7 @@ import logging
 from typing import Any, Literal
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 log = logging.getLogger(__name__)
 
@@ -242,6 +242,34 @@ class LlmDecision(BaseModel):
     """
 
     model_config = ConfigDict(extra="ignore")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_explicit_nulls(cls, value: object) -> object:
+        """Treat an explicit null as "not answered", so the default applies.
+
+        A model asked for a JSON object with fifteen keys tends to emit all
+        fifteen, filling the ones it is not using with null. That is reasonable
+        JSON and it was fatal here: `service_reason: null` fails "should be a
+        valid string" even though the field has a default of `""` and the model
+        was right not to answer it.
+
+        Measured on a real reply about DNS: five such nulls, one rejected
+        reply, and a silent fall back to the rules engine -- the user paid for a
+        hosted call and got the offline answer with nothing to say why.
+
+        Only the local path is safe from this. Ollama is handed the schema as a
+        decoding grammar, so a string field physically cannot contain null.
+        Groq's `json_object` mode guarantees only that the output parses, so
+        this is one more constraint that has to be re-established by hand.
+
+        Nulls are dropped rather than coerced, which keeps the distinction that
+        matters: a field the model left out is a field the model did not answer,
+        and the default is already the correct reading of that.
+        """
+        if isinstance(value, dict):
+            return {k: v for k, v in value.items() if v is not None}
+        return value
 
     summary: str = Field(max_length=300)
     #: Two, not "as many as it likes". Decision latency on a CPU-only machine is
