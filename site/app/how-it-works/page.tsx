@@ -69,10 +69,17 @@ export default function HowItWorksPage() {
       >
         <Prose>
           <p>
-            <strong className="text-ink">The model never writes a command.</strong> It receives
-            a problem and a list of action ids, and all it can output is a choice from that
-            list plus some parameters. Every command is hand-written, sits in the source, and
-            can be read before you install anything.
+            <strong className="text-ink">The model on your machine never writes a command.</strong>{" "}
+            It receives a problem and a list of action ids, and all it can output is a choice
+            from that list plus some parameters. Every command is hand-written, sits in the
+            source, and can be read before you install anything.
+          </p>
+          <p>
+            The cloud model, which is off until you turn it on, <em>may</em> write one, because
+            seventeen actions cannot cover every fault a person can describe. That path is
+            deliberately weaker and deliberately labelled: the exact command is on screen
+            before it runs, a refusal list screens it first, and the result is never reported
+            as verified, because no test measured it.
           </p>
           <p>Then four checks stand between a choice and a running process:</p>
         </Prose>

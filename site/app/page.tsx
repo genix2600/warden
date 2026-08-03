@@ -164,12 +164,13 @@ function Loop() {
           <div className="mt-6 rounded-xl border border-hairline bg-surface p-5">
             <p className="text-[13px] leading-relaxed text-ink-2">
               <strong className="font-semibold text-ink">
-                The model never writes a command.
+                The model on your machine never writes a command.
               </strong>{" "}
               It chooses an id from a fixed list of seventeen reviewed actions, and the
               parameters are checked against what was actually observed on your machine.
               Warden will not connect you to a network it has never seen you use, or restart
-              a device that is not there.
+              a device that is not there. The optional cloud model may write one, and Warden
+              shows you the exact command, screens it, and never calls the result verified.
             </p>
           </div>
         </Reveal>

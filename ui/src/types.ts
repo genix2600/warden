@@ -26,7 +26,6 @@ export type CollectorHealth = S["CollectorHealth"];
 export type DomainHealth = S["DomainHealth"];
 export type ReasonerHealth = S["ReasonerHealth"];
 export type DoctorReport = S["DoctorReport"];
-export type CapabilityReport = S["CapabilityReport"];
 export type Severity = S["Severity"];
 export type ComposedCommand = S["ComposedCommand"];
 export type ReasonerStatus = S["ReasonerStatus"];

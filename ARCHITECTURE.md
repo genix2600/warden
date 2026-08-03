@@ -73,11 +73,23 @@ keeps flowing while it thinks.
 This is the question worth being precise about, because "an LLM that fixes your
 computer" should worry you.
 
-**The model never composes a command.** It receives a symptom and a set of
+**The local model never composes a command.** It receives a symptom and a set of
 candidate action ids, and its entire output is a choice from that set plus
 parameters. Commands live in
 [`warden/playbooks/`](warden/playbooks/) as argv templates, written by hand,
 checked at import.
+
+The optional cloud model *may* write one, and that is the only reason to turn it
+on: seventeen reviewed actions cannot cover every fault a person can describe in
+words. Those two paths are kept apart on purpose. A chosen action is grounded
+against real readings and carries a predicate that decides whether it worked; a
+written one is screened by
+[`warden/executor/freeform.py`](warden/executor/freeform.py), runs only after a
+person has read the exact argv, and is never reported as verified, because
+nothing measured it. The interface labels them differently for the same reason.
+A reviewed action is always preferred where one fits, including for a problem
+typed in words -- see
+[`candidate_actions`](warden/playbooks/__init__.py).
 
 Then four gates in [`warden/executor/runner.py`](warden/executor/runner.py):
 
