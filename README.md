@@ -46,10 +46,9 @@ over what it actually measured, proposes one specific command with the readings
 that justify it, waits for your approval, runs it, and then re-reads the machine to
 check whether the fix worked. If the cause is physical, it says so and tells you
 what to take to a repair shop.
+### Troubleshooting Loop
 
-```
-  read  ->  reason  ->  ask  ->  run  ->  prove  ->  escalate if it failed
-```
+**Read** → **Reason** → **Ask** → **Run** → **Prove** → **Escalate**
 
 The last two steps are the ones other tools skip.
 
