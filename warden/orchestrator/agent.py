@@ -62,6 +62,43 @@ from warden.winenv import describe_host, is_admin
 
 log = logging.getLogger(__name__)
 
+
+def _startup_reasoner_line(model: str | None, cloud: object) -> tuple[str, str]:
+    """What to tell the user about which brain they actually have.
+
+    This used to be one conditional on the local model alone, and it said "No
+    local model found. Diagnoses will use the built-in rules engine." That was
+    false whenever cloud mode was on: measured on a live run with a working key,
+    Warden logged the rules-engine warning at startup and then answered the very
+    next question from the cloud model. Nobody reading the log would have known
+    which one produced the diagnosis.
+
+    A tool whose entire argument is that it does not assert things it has not
+    checked cannot announce its own capabilities from a partial check.
+    """
+    reachable = bool(getattr(cloud, "available", False))
+    cloud_model = getattr(cloud, "model", None) if reachable else None
+
+    if reachable:
+        both = f" The local model is also ready: {model}." if model else ""
+        return (
+            f"Cloud model ready: {cloud_model}. Readings will be sent to Groq "
+            f"when it is used.{both}",
+            "warn" if not model else "info",
+        )
+    if model:
+        return (f"Local model ready: {model}.", "info")
+    if cloud is not None:
+        return (
+            "Cloud mode is on but no model answered with that key, and there is "
+            "no local model either. Diagnoses will use the built-in rules engine.",
+            "warn",
+        )
+    return (
+        "No local model found. Diagnoses will use the built-in rules engine.",
+        "warn",
+    )
+
 #: Collectors too slow for the fast loop, force-run when an incident opens
 #: because the half-minute before a fault is when the event log gets interesting.
 _CONTEXT_COLLECTORS = ("sys.eventlog", "sys.devices", "sys.processes")
@@ -166,12 +203,7 @@ class Agent:
         try:
             await asyncio.to_thread(self.collectors.warmup)
             model = await self.reasoner.probe_model()
-            self._log(
-                f"Local model ready: {model}."
-                if model
-                else "No local model found. Diagnoses will use the built-in rules engine.",
-                level="info" if model else "warn",
-            )
+            self._log(*_startup_reasoner_line(model, self.reasoner.cloud))
         except asyncio.CancelledError:
             raise
         except Exception:

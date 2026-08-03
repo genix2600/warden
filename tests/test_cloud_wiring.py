@@ -14,6 +14,7 @@ from warden import credentials
 from warden.contracts import utcnow
 from warden.contracts.state import ReasonerHealth
 from warden.executor.freeform import FreeformExecutor
+from warden.orchestrator.agent import _startup_reasoner_line
 from warden.reasoner import Reasoner
 from warden.reasoner.cloud import GroqClient
 
@@ -194,3 +195,47 @@ class TestByteOrderMarks:
             '{"groq_api_key": "gsk_abcdefghijklmnop"}', encoding="utf-8"
         )
         assert credentials.load_key() == "gsk_abcdefghijklmnop"
+
+
+class TestStartupSaysWhichBrainItHas:
+    """Measured on a live run, and false at the time.
+
+    With a working Groq key, Warden logged "No local model found. Diagnoses will
+    use the built-in rules engine." at startup, and then answered the next
+    question from the cloud model. The line was written when there was only one
+    model to report and never revisited when a second was added.
+
+    A tool whose whole argument is that it does not assert what it has not
+    checked cannot announce its own capabilities from a partial check.
+    """
+
+    class FakeCloud:
+        def __init__(self, available: bool) -> None:
+            self.available = available
+            self.model = "llama-3.3-70b-versatile"
+
+    def test_cloud_reachable_is_not_reported_as_the_rules_engine(self) -> None:
+        text, _ = _startup_reasoner_line(None, self.FakeCloud(True))
+        assert "rules engine" not in text
+        assert "llama-3.3-70b-versatile" in text
+
+    def test_cloud_reachable_repeats_that_readings_leave_the_machine(self) -> None:
+        """The one claim on the box. It is worth saying twice."""
+        text, level = _startup_reasoner_line(None, self.FakeCloud(True))
+        assert "sent to Groq" in text
+        assert level == "warn"
+
+    def test_both_models_are_named_when_both_are_there(self) -> None:
+        text, level = _startup_reasoner_line("qwen2.5:1.5b", self.FakeCloud(True))
+        assert "llama-3.3-70b-versatile" in text and "qwen2.5:1.5b" in text
+        assert level == "info"
+
+    def test_a_key_that_does_not_work_says_so(self) -> None:
+        text, level = _startup_reasoner_line(None, self.FakeCloud(False))
+        assert "no model answered with that key" in text
+        assert level == "warn"
+
+    def test_the_original_message_survives_when_it_is_true(self) -> None:
+        text, level = _startup_reasoner_line(None, None)
+        assert text == "No local model found. Diagnoses will use the built-in rules engine."
+        assert level == "warn"
