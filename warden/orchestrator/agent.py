@@ -32,6 +32,7 @@ from warden.contracts import (
     ExecutionFinishedEvent,
     ExecutionOutcome,
     ExecutionOutputEvent,
+    ExecutionRecord,
     ExecutionStartedEvent,
     Incident,
     IncidentClosedEvent,
@@ -61,6 +62,14 @@ from warden.store import ObservationStore
 from warden.winenv import describe_host, is_admin
 
 log = logging.getLogger(__name__)
+
+#: How many model-written commands may run on one incident before Warden stops.
+#:
+#: Counts commands that actually executed, not diagnoses. Three covers the
+#: failure this bound exists for -- a missing flag, a dependent service, a wrong
+#: service name -- without letting a model try variations at someone's machine
+#: indefinitely.
+_MAX_COMPOSED_ATTEMPTS = 3
 
 
 def _startup_reasoner_line(model: str | None, cloud: object) -> tuple[str, str]:
@@ -403,7 +412,7 @@ class Agent:
 
             self._log(
                 "Reasoning over the evidence."
-                if not incident.attempted_actions
+                if not incident.attempted_actions and not incident.history
                 else "Re-reasoning with what the last attempt taught us."
             )
             diagnosis = await self.reasoner.diagnose(
@@ -411,6 +420,7 @@ class Agent:
                 self.store,
                 frozenset(incident.attempted_actions),
                 note=note,
+                attempts=incident.history,
             )
             incident.diagnosis = diagnosis
             self.bus.publish(DiagnosisReadyEvent(incident_id=incident.id, diagnosis=diagnosis))
@@ -582,6 +592,7 @@ class Agent:
                 on_output=on_output,
             )
             incident.execution = record
+            incident.history.append(record)
             self.bus.publish(ExecutionFinishedEvent(incident_id=incident.id, record=record))
 
             if record.outcome is ExecutionOutcome.BLOCKED:
@@ -592,16 +603,27 @@ class Agent:
                 self._forget(incident)
                 return incident
 
-            # Deliberately not RESOLVED. There is no declared predicate here, so
-            # Warden has measured nothing and has no standing to say the problem
-            # is fixed. The user is given the exit code, the output and the
-            # model's own check, and makes that call themselves -- which is a
-            # weaker claim than the reviewed path makes, and an honest one.
-            incident.notes.append(
-                f"The command ran and exited {record.exit_code}. Warden did not verify "
-                f"this: a command the model wrote carries no test it can evaluate. "
-                f"{composed.check}".strip()
-            )
+            if record.outcome is not ExecutionOutcome.RESOLVED and self._may_retry(incident):
+                # The command failed and Windows said why. Measured: Warden ran
+                # `Restart-Service bthserv`, Windows replied "Cannot stop
+                # service ... because it has dependent services. It can only be
+                # stopped if the Force flag is set", and Warden closed the
+                # incident. The machine had named the fault and the fix in one
+                # sentence, and that sentence went to a log nobody reads.
+                #
+                # So the output goes back to the model. Nothing is re-run
+                # automatically: whatever comes back returns to the same
+                # approval gate as the first attempt, because a second command
+                # written by a model is no more reviewed than the first one was.
+                self._log(
+                    f"That did not work (exit {record.exit_code}). Sending the error "
+                    f"back to the model to try again.",
+                    level="warn",
+                )
+                await self._diagnose(incident, note=self._described(incident))
+                return incident
+
+            incident.notes.append(self._composed_note(record, composed.check))
             self._close(incident, IncidentState.UNRESOLVED)
             self._log(
                 f"Ran, exit code {record.exit_code}. Not verified: no declared test.",
@@ -610,6 +632,57 @@ class Agent:
             self.bus.publish(IncidentClosedEvent(incident=incident))
             self._forget(incident)
             return incident
+
+    def _may_retry(self, incident: Incident) -> bool:
+        """Whether a failed command earns another go at the model.
+
+        Bounded rather than open-ended. Three attempts is enough for the shape
+        of failure this exists for -- a missing flag, a dependent service, a
+        wrong service name -- and stops well short of a model trying variations
+        at a machine while someone watches. It also matters that Groq's free
+        tier rate-limits: an unbounded loop would spend the user's quota during
+        the one demonstration where it needs to work.
+
+        Only the cloud reasoner can act on the output at all. The local model
+        chooses from a closed registry and cannot write a corrected command, and
+        the rules engine has nothing to reconsider, so with neither of those
+        there is nothing to retry with and saying so beats looking busy.
+        """
+        cloud = self.reasoner.cloud
+        if cloud is None or not getattr(cloud, "available", False):
+            return False
+        return len(incident.history) < _MAX_COMPOSED_ATTEMPTS
+
+    @staticmethod
+    def _described(incident: Incident) -> str:
+        """What the user typed, if this incident began with them typing it."""
+        for symptom in incident.symptoms:
+            described = symptom.facts.get("described")
+            if isinstance(described, str) and described.strip():
+                return described
+        return ""
+
+    @staticmethod
+    def _composed_note(record: ExecutionRecord, check: str) -> str:
+        """The closing note. Deliberately not a verdict.
+
+        There is no declared predicate on this path, so Warden has measured
+        nothing and has no standing to say the problem is fixed. The user gets
+        the exit code, the output and the model's own check, and makes that call
+        themselves -- a weaker claim than the reviewed path makes, and an honest
+        one.
+        """
+        if record.outcome is ExecutionOutcome.RESOLVED:
+            return (
+                f"The command ran and exited {record.exit_code}. Warden did not verify "
+                f"this: a command the model wrote carries no test it can evaluate. "
+                f"{check}".strip()
+            )
+        return (
+            f"The command failed with exit code {record.exit_code}, and Warden has run "
+            f"out of things to try. The output above is what Windows said; it is often "
+            f"more specific than anything Warden can add."
+        )
 
     async def approve(self, incident_id: str) -> Incident:
         """The only entry point to the executor. Nothing else calls it."""

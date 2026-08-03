@@ -18,9 +18,10 @@ show as unsupported.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from typing import Any
 
-from warden.contracts import Observation, Symptom
+from warden.contracts import ExecutionRecord, Observation, Symptom
 from warden.playbooks import CANDIDATES, PlaybookRegistry
 from warden.store import ObservationStore
 from warden.winenv import describe_host
@@ -145,6 +146,56 @@ def _format_actions(
     return "\n\n".join(blocks)
 
 
+#: How much of each stream the model is shown.
+#:
+#: Windows error text puts the useful sentence first and the ceremony after --
+#: CategoryInfo, FullyQualifiedErrorId, a caret diagram. 700 characters reaches
+#: the actionable part of every failure measured so far while leaving room in the
+#: prompt for the evidence, which is what the diagnosis is actually built from.
+_OUTPUT_CHARS = 700
+
+
+def _format_attempts(attempts: Sequence[ExecutionRecord]) -> str:
+    """What has already been run here, and what the machine said back.
+
+    This exists because of a specific failure. Warden ran
+    `Restart-Service bthserv`, Windows replied "Cannot stop service ... because
+    it has dependent services. It can only be stopped if the Force flag is set",
+    and Warden closed the incident. The machine had said precisely what was
+    wrong and precisely how to fix it -- add `-Force` -- and that sentence went
+    into a log nobody reads.
+
+    A diagnostician that does not read the error it just caused is not
+    diagnosing. Anything holding a command's output has to hand it back.
+    """
+    if not attempts:
+        return ""
+
+    blocks = []
+    for index, record in enumerate(attempts, start=1):
+        outcome = "timed out" if record.timed_out else f"exit code {record.exit_code}"
+        stdout = (record.stdout_tail or "").strip()[-_OUTPUT_CHARS:]
+        stderr = (record.stderr_tail or "").strip()[-_OUTPUT_CHARS:]
+        blocks.append(
+            f"  {index}. {' '.join(record.argv)}\n"
+            f"     result: {outcome}\n"
+            f"     what Windows printed:\n"
+            + (f"       {stderr or stdout or '(nothing)'}".replace("\n", "\n       "))
+        )
+
+    return (
+        "\nCOMMANDS THAT HAVE ALREADY RUN ON THIS INCIDENT, AND FAILED\n"
+        + "\n".join(blocks)
+        + "\n\n"
+        "  Read the output before answering. Windows usually says what was wrong\n"
+        "  with the command, and often says how to correct it -- a missing flag, a\n"
+        "  dependent service, a permission. If the fix is a corrected version of\n"
+        "  the same command, write that. If the output shows the approach itself\n"
+        "  was wrong, change approach. Do not repeat a command above unchanged,\n"
+        "  and do not claim the problem is now fixed: nothing here worked.\n"
+    )
+
+
 def build_user_prompt(
     symptom: Symptom,
     store: ObservationStore,
@@ -153,6 +204,7 @@ def build_user_prompt(
     note: str = "",
     may_compose: bool = False,
     refused: tuple[list[str], str] | None = None,
+    attempts: Sequence[ExecutionRecord] = (),
     extra_sources: tuple[str, ...] = (
         "sys.cpu.percent",
         "sys.memory",
@@ -177,6 +229,8 @@ def build_user_prompt(
         if exclude
         else ""
     )
+
+    ran = _format_attempts(attempts)
 
     # Kept separate from `note`, which is framed to the model as the user's own
     # words. A refusal is Warden speaking, and attributing it to the user would
@@ -214,7 +268,7 @@ EVIDENCE THE DETECTOR CITED
 
 OTHER CURRENT READINGS
 {_format_evidence(context)}
-{described}{already_tried}{rejected}
+{described}{already_tried}{ran}{rejected}
 ACTIONS YOU MAY CHOOSE FROM
 {_format_actions(symptom, registry, exclude, may_compose)}
 

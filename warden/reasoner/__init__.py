@@ -29,8 +29,9 @@ then to rules, and the interface says which one you got and why.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 
-from warden.contracts import Diagnosis, ReasonerMode, Symptom
+from warden.contracts import Diagnosis, ExecutionRecord, ReasonerMode, Symptom
 from warden.playbooks import REGISTRY, PlaybookRegistry
 from warden.reasoner.cloud import GroqClient
 from warden.reasoner.guardrail import GuardrailRejection, validate
@@ -103,6 +104,7 @@ class Reasoner:
         store: ObservationStore,
         exclude: frozenset[str] = frozenset(),
         note: str = "",
+        attempts: Sequence[ExecutionRecord] = (),
     ) -> Diagnosis:
         """Diagnose, optionally excluding actions already proven not to work here.
 
@@ -118,7 +120,9 @@ class Reasoner:
                 await self._cloud.refresh_models()
             if self._cloud.available:
                 try:
-                    return await self._diagnose_cloud(symptom, store, exclude, note)
+                    return await self._diagnose_cloud(
+                        symptom, store, exclude, note, attempts
+                    )
                 except (LlmUnavailable, GuardrailRejection) as exc:
                     fallback_reason = f"the cloud model was not used: {exc}"
                     log.info("cloud path failed, trying local: %s", exc)
@@ -140,7 +144,9 @@ class Reasoner:
             try:
                 decision, model, latency_ms = await self._client.decide(
                     SYSTEM_PROMPT,
-                    build_user_prompt(symptom, store, self._registry, exclude, note),
+                    build_user_prompt(
+                        symptom, store, self._registry, exclude, note, attempts=attempts
+                    ),
                 )
                 return validate(
                     decision,
@@ -171,6 +177,7 @@ class Reasoner:
         store: ObservationStore,
         exclude: frozenset[str],
         note: str,
+        attempts: Sequence[ExecutionRecord] = (),
     ) -> Diagnosis:
         """One cloud decision, validated two different ways.
 
@@ -184,7 +191,13 @@ class Reasoner:
         decision, model, latency_ms = await self._cloud.decide(
             CLOUD_SYSTEM_PROMPT,
             build_user_prompt(
-                symptom, store, self._registry, exclude, note, may_compose=True
+                symptom,
+                store,
+                self._registry,
+                exclude,
+                note,
+                may_compose=True,
+                attempts=attempts,
             ),
         )
 
@@ -216,6 +229,7 @@ class Reasoner:
                 note,
                 may_compose=True,
                 refused=(refused_argv, refused_why),
+                attempts=attempts,
             ),
         )
         second = self._settle(
